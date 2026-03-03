@@ -1,0 +1,18 @@
+# === Neural Proposer ===
+torch
+torch_geometric
+
+# === Symbolic Verifier ===
+clingo
+networkx
+
+# === Database ===
+psycopg[binary]
+pgvector
+
+# === NLP ===
+spacy
+sentence-transformers
+
+# === Experiments ===
+wandb

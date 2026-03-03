@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/nesy/schemas/common.schema.json",
+  "title": "Common Definitions",
+  "type": "object",
+  "$defs": {
+    "ID": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ISODateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ISODate": {
+      "type": "string",
+      "format": "date"
+    },
+    "Confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "Span": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end":   { "type": "integer", "minimum": 0 }
+      }
+    },
+    "ProvenanceItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id"],
+      "properties": {
+        "source_id":  { "$ref": "#/$defs/ID" },
+        "span":       { "$ref": "#/$defs/Span" },
+        "spans": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Span" }
+        },
+        "extractor":  { "type": "string" },
+        "confidence": { "$ref": "#/$defs/Confidence" },
+        "note":       { "type": "string" }
+      },
+      "not": {
+        "required": ["span", "spans"],
+        "description": "span i spans są wzajemnie wykluczające się — użyj span dla jednego spanu, spans dla wielu"
+      }
+    },
+    "TruthDomain": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["T", "F", "U"] },
+      "minItems": 2,
+      "uniqueItems": true
+    },
+    "TruthValue": {
+      "type": "string",
+      "enum": ["T", "F", "U"]
+    },
+    "TruthDistribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain"],
+      "properties": {
+        "domain":     { "$ref": "#/$defs/TruthDomain" },
+        "value":      { "$ref": "#/$defs/TruthValue" },
+        "confidence": { "$ref": "#/$defs/Confidence" },
+        "logits": {
+          "type": "object",
+          "description": "Logity dla wartości prawdziwości faktu; klucze ograniczone do T/F/U",
+          "propertyNames": { "enum": ["T", "F", "U"] },
+          "additionalProperties": { "type": "number" },
+          "properties": {
+            "T": { "type": "number" },
+            "F": { "type": "number" },
+            "U": { "type": "number" }
+          }
+        }
+      }
+    },
+    "RoleArg": {
+      "description": "Argument roli w fakcie reifikowanym. Dokładnie jedno z: entity_id (referencja do encji) lub literal_value (wartość bezpośrednia: data, kwota, enum).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role"],
+      "properties": {
+        "role":          { "type": "string", "minLength": 1 },
+        "entity_id":     { "$ref": "#/$defs/ID" },
+        "literal_value": { "type": "string",  "minLength": 1 },
+        "type_hint":     { "type": "string" }
+      },
+      "oneOf": [
+        {
+          "required": ["entity_id"],
+          "not": { "required": ["literal_value"] }
+        },
+        {
+          "required": ["literal_value"],
+          "not": { "required": ["entity_id"] }
+        }
+      ]
+    },
+    "VarTerm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["var"],
+      "properties": {
+        "var": { "type": "string", "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$" }
+      }
+    },
+    "ConstTerm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["const"],
+      "properties": {
+        "const": { "$ref": "#/$defs/ID" }
+      }
+    },
+    "Term": {
+      "oneOf": [
+        { "$ref": "#/$defs/VarTerm" },
+        { "$ref": "#/$defs/ConstTerm" }
+      ]
+    },
+    "RuleArg": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "term"],
+      "properties": {
+        "role":      { "type": "string", "minLength": 1 },
+        "term":      { "$ref": "#/$defs/Term" },
+        "type_hint": { "type": "string" }
+      }
+    }
+  }
+}

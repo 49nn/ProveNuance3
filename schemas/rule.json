@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/nesy/schemas/rule.schema.json",
+  "title": "Rule (Horn + NAF, stratified by metadata)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rule_id", "language", "head", "body", "metadata"],
+  "properties": {
+    "rule_id":  { "$ref": "common.schema.json#/$defs/ID" },
+    "language": {
+      "type": "string",
+      "enum": ["horn_naf_stratified"]
+    },
+    "head": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["predicate", "args"],
+      "properties": {
+        "predicate": { "type": "string", "minLength": 1 },
+        "args": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/RuleArg" }
+        }
+      }
+    },
+    "body": {
+      "type": "array",
+      "minItems": 0,
+      "description": "Ciało reguły. Pusta tablica oznacza fakt / unit clause (np. prepaid(card)).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["literal_type", "predicate", "args"],
+        "properties": {
+          "literal_type": { "type": "string", "enum": ["pos", "naf"] },
+          "predicate":    { "type": "string", "minLength": 1 },
+          "args": {
+            "type": "array",
+            "items": { "$ref": "common.schema.json#/$defs/RuleArg" }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stratum", "learned"],
+      "properties": {
+        "stratum":          { "type": "integer",  "minimum": 0 },
+        "learned":          { "type": "boolean" },
+        "weight":           { "type": "number",   "minimum": 0 },
+        "support":          { "type": "integer",  "minimum": 0 },
+        "precision_est":    { "$ref": "common.schema.json#/$defs/Confidence" },
+        "last_validated_at":{ "type": "string",   "format": "date-time" },
+        "constraints": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

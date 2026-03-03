@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/nesy/schemas/fact.schema.json",
+  "title": "Fact (n-ary, reified)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["fact_id", "predicate", "args", "truth", "status"],
+  "properties": {
+    "fact_id":   { "$ref": "common.schema.json#/$defs/ID" },
+    "predicate": { "type": "string", "minLength": 1 },
+    "arity": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Deklarowana arność predykatu. Powinno być równe długości args — walidacja na poziomie aplikacji."
+    },
+    "args": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/RoleArg" }
+    },
+    "truth": { "$ref": "common.schema.json#/$defs/TruthDistribution" },
+    "time": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "event_time": { "type": ["string", "null"], "format": "date-time" },
+        "valid_from":  { "type": ["string", "null"], "format": "date-time" },
+        "valid_to":    { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["observed", "inferred_candidate", "proved", "rejected", "retracted"]
+    },
+    "source": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_id"],
+          "properties": {
+            "source_id":  { "$ref": "common.schema.json#/$defs/ID" },
+            "spans": {
+              "type": "array",
+              "items": { "$ref": "common.schema.json#/$defs/Span" }
+            },
+            "extractor":  { "type": "string" },
+            "confidence": { "$ref": "common.schema.json#/$defs/Confidence" }
+          }
+        }
+      ]
+    },
+    "constraints_tags": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "proof_id": { "$ref": "common.schema.json#/$defs/ID" },
+        "neural_trace": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["edge_type", "delta_logits", "step"],
+            "description": "Wkład krawędzi do logitów docelowego faktu. Dokładnie jedno źródło: from_fact_id albo from_cluster_id.",
+            "properties": {
+              "from_fact_id":    { "$ref": "common.schema.json#/$defs/ID" },
+              "from_cluster_id": { "$ref": "common.schema.json#/$defs/ID" },
+              "edge_type":       { "type": "string", "minLength": 1 },
+              "delta_logits": {
+                "type": "object",
+                "description": "Klucze odpowiadają wartościom z TruthDomain (T/F/U)",
+                "propertyNames": { "enum": ["T", "F", "U"] },
+                "additionalProperties": { "type": "number" },
+                "minProperties": 1
+              },
+              "step": { "type": "integer", "minimum": 0 }
+            },
+            "oneOf": [
+              {
+                "required": ["from_fact_id"],
+                "not": { "required": ["from_cluster_id"] }
+              },
+              {
+                "required": ["from_cluster_id"],
+                "not": { "required": ["from_fact_id"] }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
