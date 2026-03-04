@@ -25,6 +25,10 @@ class NNConfig:
     top_k_trace: int = 5
     """Maksymalna liczba NeuralTraceItem na fakt (top-k wg |Δs|₂)."""
 
+    # --- Candidate generation ---
+    candidate_fact_threshold: float = 0.70
+    """Minimalna pewność top-1 dla generowania nowych inferred_candidate z klastrów."""
+
     # --- Dziedzina prawdziwości ---
     truth_domain: tuple[str, ...] = ("T", "F", "U")
     """Porządek wartości T/F/U — indeksy w tensorze logitów faktów."""

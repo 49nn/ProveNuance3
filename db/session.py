@@ -15,10 +15,10 @@ from .case_repo import load_case as load_case_data
 from .case_repo import resolve_case_id_int
 from .cluster_repo import upsert_cluster_states
 from .connection import connect as connect_db
-from .entity_repo import upsert_entity
-from .fact_repo import upsert_fact
+from .entity_repo import link_or_upsert_entity, upsert_entity
+from .fact_repo import attach_proof_run_to_facts, upsert_fact
 from .proof_repo import save_proof_run
-from .rule_repo import load_rules
+from .rule_repo import load_rules, upsert_learned_rules
 from .schema_repo import load_cluster_schemas
 
 if TYPE_CHECKING:
@@ -46,6 +46,15 @@ class DBSession:
 
     def load_rules(self, enabled_only: bool = True) -> list["Rule"]:
         return load_rules(self.conn, enabled_only=enabled_only)
+
+    def save_learned_rules(
+        self,
+        rules: list["Rule"],
+        module_name: str = "learned_nn",
+    ) -> None:
+        with self.conn.transaction():
+            upsert_learned_rules(self.conn, rules, module_name=module_name)
+        self.conn.commit()
 
     # ------------------------------------------------------------------
     # Case
@@ -75,13 +84,29 @@ class DBSession:
 
             if result.proof_nodes:
                 proof_result = "proved" if result.proved else "unknown"
-                save_proof_run(
+                proof_run_id = save_proof_run(
                     self.conn,
                     proof_nodes=result.proof_nodes,
                     query="pipeline_result",
                     result=proof_result,
                     case_id_int=case_id_int,
                 )
+                proved_fact_ids = [
+                    f.fact_id
+                    for f in result.facts
+                    if (
+                        f.status == FactStatus.proved
+                        and f.provenance is not None
+                        and f.provenance.proof_id is not None
+                    )
+                ]
+                attach_proof_run_to_facts(
+                    self.conn,
+                    fact_ids=proved_fact_ids,
+                    proof_id=proof_run_id,
+                    case_id_int=case_id_int,
+                )
+        self.conn.commit()
 
     def save_extraction_result(
         self,
@@ -96,7 +121,7 @@ class DBSession:
                 self._upsert_source(result.source_id, source_text)
 
             for entity in result.entities:
-                upsert_entity(self.conn, entity)
+                link_or_upsert_entity(self.conn, entity)
 
             for fact in result.facts:
                 fact_to_save = (
@@ -107,6 +132,7 @@ class DBSession:
                 upsert_fact(self.conn, fact_to_save, case_id_int)
 
             upsert_cluster_states(self.conn, result.cluster_states, case_id_int)
+        self.conn.commit()
 
     # ------------------------------------------------------------------
     # Connection lifecycle

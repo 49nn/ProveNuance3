@@ -274,3 +274,124 @@ def load_entities_for_case(
         if entity is not None:
             entities.append(entity)
     return entities
+
+
+def _entity_match_score(
+    candidate: Entity,
+    existing_canonical: str,
+    existing_aliases: list[str],
+    existing_blocking: list[str],
+) -> int:
+    score = 0
+    if existing_canonical.lower() == candidate.canonical_name.lower():
+        score += 100
+
+    candidate_aliases = {a.lower() for a in candidate.aliases}
+    existing_aliases_l = {a.lower() for a in existing_aliases}
+    overlap_alias = candidate_aliases & existing_aliases_l
+    score += 20 * len(overlap_alias)
+
+    cand_bk = set(candidate.linking.blocking_keys if candidate.linking else [])
+    overlap_bk = cand_bk & set(existing_blocking or [])
+    score += 10 * len(overlap_bk)
+    return score
+
+
+def link_or_upsert_entity(conn: psycopg.Connection, entity: Entity) -> str:
+    """
+    Deterministic match/create:
+      - score by canonical_name, aliases, blocking_keys
+      - tie-break by lexicographic entity_id
+      - if score <= 0: create/upsert by own entity_id
+      - if score > 0: link to best existing entity_id and upsert merged data
+    """
+    candidate_aliases = [entity.canonical_name] + list(entity.aliases)
+    candidate_blocking = entity.linking.blocking_keys if entity.linking else []
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                e.entity_id,
+                e.canonical_name,
+                COALESCE(e.blocking_keys, '{}') AS blocking_keys,
+                COALESCE(ARRAY_AGG(a.alias) FILTER (WHERE a.alias IS NOT NULL), '{}') AS aliases
+            FROM entities e
+            LEFT JOIN entity_aliases a ON a.entity_id = e.id
+            WHERE
+                lower(e.canonical_name) = lower(%s)
+                OR EXISTS (
+                    SELECT 1
+                    FROM entity_aliases a2
+                    WHERE a2.entity_id = e.id
+                      AND lower(a2.alias) = ANY(%s)
+                )
+                OR (
+                    %s::text[] IS NOT NULL
+                    AND e.blocking_keys && %s::text[]
+                )
+            GROUP BY e.id, e.entity_id, e.canonical_name, e.blocking_keys
+            """,
+            (
+                entity.canonical_name,
+                [a.lower() for a in candidate_aliases] or [""],
+                candidate_blocking if candidate_blocking else None,
+                candidate_blocking if candidate_blocking else None,
+            ),
+        )
+        rows = cur.fetchall()
+
+    best_entity_id: str | None = None
+    best_score = 0
+    for eid, canonical, blocking_keys, aliases in rows:
+        score = _entity_match_score(
+            candidate=entity,
+            existing_canonical=str(canonical),
+            existing_aliases=list(aliases or []),
+            existing_blocking=list(blocking_keys or []),
+        )
+        if score > best_score:
+            best_score = score
+            best_entity_id = str(eid)
+        elif score == best_score and score > 0 and best_entity_id is not None:
+            best_entity_id = min(best_entity_id, str(eid))
+
+    if best_entity_id is None or best_score <= 0:
+        upsert_entity(conn, entity)
+        return entity.entity_id
+
+    linked = entity.model_copy(update={"entity_id": best_entity_id})
+    upsert_entity(conn, linked)
+    return best_entity_id
+
+
+def resolve_slot_conflicts(
+    conn: psycopg.Connection,
+    entity_id: str,
+) -> dict[str, MemorySlotEntry]:
+    """
+    Resolve slot conflicts deterministically:
+      1) source_rank desc
+      2) confidence desc
+      3) valid_from desc
+      4) stable JSON value representation asc (tie-break)
+    """
+    entity = _load_entity_record(conn, entity_id)
+    if entity is None:
+        return {}
+
+    resolved: dict[str, MemorySlotEntry] = {}
+    for slot_name, entries in entity.memory_slots.items():
+        if not entries:
+            continue
+
+        def key(e: MemorySlotEntry) -> tuple[float, float, float, str]:
+            sr = float(e.source_rank) if e.source_rank is not None else -1.0
+            cf = float(e.confidence) if e.confidence is not None else -1.0
+            vf = e.valid_from.timestamp() if e.valid_from is not None else float("-inf")
+            stable_val = str(e.normalized if e.normalized is not None else e.value)
+            return (sr, cf, vf, stable_val)
+
+        resolved[slot_name] = max(entries, key=key)
+
+    return resolved

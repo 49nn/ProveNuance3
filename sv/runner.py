@@ -6,6 +6,8 @@ Generuje tekst LP z Pydantic Rule obiektów (nie potrzebuje clingo_text z DB).
 from __future__ import annotations
 
 import clingo
+from datetime import date
+import re
 
 from data_model.common import ConstTerm, Term, VarTerm
 from data_model.rule import LiteralType, Rule, RuleBodyLiteral, RuleHead
@@ -131,6 +133,209 @@ def _domain_facts(base_lp_facts: list[str]) -> list[str]:
     return [f"{_DOMAIN}({e})." for e in sorted(entities)]
 
 
+def _parse_lp_fact(lp_fact: str) -> tuple[str, list[str]] | None:
+    """
+    Parse 'pred(a,b,c).' -> ('pred', ['a','b','c']).
+    """
+    text = lp_fact.strip().rstrip(".")
+    if not text:
+        return None
+    if "(" not in text:
+        return text, []
+    pred, tail = text.split("(", 1)
+    args_raw = tail.rstrip(")")
+    args = [a.strip() for a in args_raw.split(",")] if args_raw else []
+    return pred.strip(), args
+
+
+_DATE_TOKEN_RE = re.compile(
+    r"^(?:e_|d_)?(?P<y>\d{4})_(?P<m>\d{2})_(?P<d>\d{2})(?:_[0-2]\d_[0-5]\d(?:_[0-5]\d)?)?$"
+)
+
+
+def _parse_date_token(token: str) -> date | None:
+    """
+    Obsługuje np. e_2026_02_10, d_2026_02_10, 2026_02_10.
+    """
+    m = _DATE_TOKEN_RE.match(token)
+    if not m:
+        return None
+    try:
+        return date(int(m.group("y")), int(m.group("m")), int(m.group("d")))
+    except ValueError:
+        return None
+
+
+def _suffix_digits(token: str) -> str:
+    m = re.search(r"(\d+)$", token)
+    return m.group(1) if m else ""
+
+
+def _extract_computed_facts(base_lp_facts: list[str]) -> list[str]:
+    """
+    Buduje fakty pomocnicze wymagane przez reguły (external facts layer):
+      - within_14_days(DS, DD)
+      - paid_within_48h(O, D0)
+      - coupon_not_expired(Cpn, today)
+      - meets_min_basket(Cpn, O)  (gdy istnieją order_amount + coupon_min_basket)
+      - order_contains(O, P)      (heurystyka nazewnicza)
+      - account_of_customer(C, A) (heurystyka nazewnicza)
+    """
+    parsed = [p for p in (_parse_lp_fact(f) for f in base_lp_facts) if p is not None]
+
+    by_pred: dict[str, list[list[str]]] = {}
+    for pred, args in parsed:
+        by_pred.setdefault(pred, []).append(args)
+
+    derived: set[str] = set()
+
+    # within_14_days(DS, DD)
+    date_tokens: dict[str, date] = {}
+    for _, args in parsed:
+        for arg in args:
+            parsed_date = _parse_date_token(arg)
+            if parsed_date is not None:
+                date_tokens[arg] = parsed_date
+
+    for ds_token, ds_date in date_tokens.items():
+        for dd_token, dd_date in date_tokens.items():
+            delta = (ds_date - dd_date).days
+            if 0 <= delta <= 14:
+                derived.add(f"within_14_days({ds_token},{dd_token}).")
+
+    # paid_within_48h(O, D0) from order_placed(_,O,D0) + payment_made(O,_,DPAY,_)
+    order_placed = by_pred.get("order_placed", [])
+    payment_made = by_pred.get("payment_made", [])
+    for op in order_placed:
+        if len(op) < 3:
+            continue
+        order_token = op[1]
+        d0_token = op[2]
+        d0 = _parse_date_token(d0_token)
+        if d0 is None:
+            continue
+        for pm in payment_made:
+            if len(pm) < 3:
+                continue
+            if pm[0] != order_token:
+                continue
+            dpay = _parse_date_token(pm[2])
+            if dpay is None:
+                continue
+            delta = (dpay - d0).days
+            if 0 <= delta <= 2:
+                derived.add(f"paid_within_48h({order_token},{d0_token}).")
+                break
+
+    # coupon_not_expired(Cpn, today) for coupons seen in coupon_applied facts
+    for args in by_pred.get("coupon_applied", []):
+        if len(args) >= 3:
+            cpn = args[2]
+            derived.add(f"coupon_not_expired({cpn},today).")
+
+    # meets_min_basket(Cpn, O) when both base facts exist
+    # order_amount(O, Amount), coupon_min_basket(Cpn, MinAmount)
+    order_amount: dict[str, float] = {}
+    coupon_min: dict[str, float] = {}
+
+    def _parse_number_token(token: str) -> float | None:
+        token = token.strip()
+        if token.startswith("e_"):
+            token = token[2:]
+        # Heurystyka: ostatni underscore traktujemy jako separator dziesiętny.
+        if "_" in token and token.replace("_", "").isdigit():
+            left, right = token.rsplit("_", 1)
+            if right.isdigit():
+                candidate = f"{left}.{right}"
+            else:
+                candidate = token
+        else:
+            candidate = token
+        candidate = candidate.replace("_", "")
+        try:
+            return float(candidate)
+        except ValueError:
+            return None
+
+    for args in by_pred.get("order_amount", []):
+        if len(args) >= 2:
+            val = _parse_number_token(args[1])
+            if val is not None:
+                order_amount[args[0]] = val
+    for args in by_pred.get("coupon_min_basket", []):
+        if len(args) >= 2:
+            val = _parse_number_token(args[1])
+            if val is not None:
+                coupon_min[args[0]] = val
+
+    for cpn, min_amount in coupon_min.items():
+        for order_token, amount in order_amount.items():
+            if amount >= min_amount:
+                derived.add(f"meets_min_basket({cpn},{order_token}).")
+
+    # order_contains(O, P): heurystyka po nazwach identyfikatorów.
+    orders: set[str] = set()
+    for pred, args in parsed:
+        if pred in {
+            "order_placed",
+            "order_accepted",
+            "delivered",
+            "withdrawal_statement_submitted",
+            "returned",
+            "coupon_applied",
+            "payment_selected",
+            "payment_made",
+            "chargeback_opened",
+        }:
+            if len(args) >= 2:
+                # W większości tych predykatów ORDER jest na pozycji 1, ale
+                # payment_selected/payment_made mają ORDER na pozycji 0.
+                if pred in {"payment_selected", "payment_made"}:
+                    orders.add(args[0])
+                else:
+                    orders.add(args[1])
+
+    products: set[str] = set()
+    for pred, args in parsed:
+        if pred == "product_type" and args:
+            products.add(args[0])
+    for token in date_tokens:
+        # Ignoruj daty.
+        products.discard(token)
+
+    for product in products:
+        if product.startswith("prod_"):
+            rest = product[5:]
+            if rest in orders:
+                derived.add(f"order_contains({rest},{product}).")
+        digits = _suffix_digits(product)
+        if digits:
+            candidate = f"o{digits}"
+            if candidate in orders:
+                derived.add(f"order_contains({candidate},{product}).")
+
+    # account_of_customer(C, A): heurystyka po końcówce numerycznej.
+    customers: set[str] = set()
+    accounts: set[str] = set()
+    for pred, args in parsed:
+        if pred == "order_placed" and args:
+            customers.add(args[0])
+        if pred == "account_status" and args:
+            accounts.add(args[0])
+        if pred == "account_blocked" and len(args) >= 2:
+            accounts.add(args[1])
+
+    for customer in customers:
+        c_digits = _suffix_digits(customer)
+        if not c_digits:
+            continue
+        for account in accounts:
+            if _suffix_digits(account) == c_digits:
+                derived.add(f"account_of_customer({customer},{account}).")
+
+    return sorted(derived)
+
+
 def build_program(
     rules: list[Rule],
     base_lp_facts: list[str],
@@ -138,11 +343,16 @@ def build_program(
     """
     Składa kompletny program LP:
       - fakty bazowe (z konwertera)
+      - fakty obliczane (external facts layer)
       - fakty domenowe _sv_domain_ (dla unsafe variables w regułach)
       - reguły (generowane z Rule obiektów)
     """
-    lines: list[str] = list(base_lp_facts)
-    lines += _domain_facts(base_lp_facts)
+    base_unique = sorted(set(base_lp_facts))
+    computed = _extract_computed_facts(base_unique)
+    all_facts = sorted(set(base_unique + computed))
+
+    lines: list[str] = list(all_facts)
+    lines += _domain_facts(all_facts)
     for rule in rules:
         lines.append(rule_to_lp(rule))
     return "\n".join(lines)

@@ -30,6 +30,7 @@ from .graph_builder import (
 from .inference import NeuralInference
 from .message_passing import HeteroMessagePassingBank, LogitMessagePassing
 from .proposer import NeuralProposer
+from .rule_extractor import RuleExtractionConfig, extract_rules_from_mp_bank
 from .trace import NeuralTracer
 from .trainer import ProposerTrainer
 
@@ -54,6 +55,9 @@ __all__ = [
     "NeuralTracer",
     # Proposer
     "NeuralProposer",
+    # Rule extraction
+    "RuleExtractionConfig",
+    "extract_rules_from_mp_bank",
     # Pipeline
     "NeuralInference",
     "ProposerTrainer",

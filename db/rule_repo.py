@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import psycopg
+from psycopg.types.json import Jsonb
 
 from data_model.common import ConstTerm, VarTerm
 from data_model.rule import (
@@ -91,3 +92,75 @@ def load_rules(conn: psycopg.Connection, enabled_only: bool = True) -> list[Rule
             ),
         ))
     return result
+
+
+def _ensure_rule_module(conn: psycopg.Connection, module_name: str) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO rule_modules(name, description)
+            VALUES (%s, %s)
+            ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+            RETURNING id
+            """,
+            (module_name, f"Auto-learned rules from {module_name}"),
+        )
+        return int(cur.fetchone()[0])  # type: ignore[index]
+
+
+def upsert_learned_rules(
+    conn: psycopg.Connection,
+    rules: list[Rule],
+    module_name: str = "learned_nn",
+) -> None:
+    """
+    Save extracted learned rules into rules table (learned=true).
+    """
+    if not rules:
+        return
+
+    module_id = _ensure_rule_module(conn, module_name)
+    with conn.cursor() as cur:
+        for rule in rules:
+            cur.execute(
+                """
+                INSERT INTO rules (
+                    rule_id, module_id, language, head, body,
+                    stratum, learned, weight, support, precision_est,
+                    last_validated_at, constraints, enabled
+                )
+                VALUES (
+                    %s, %s, %s::rule_language, %s, %s,
+                    %s, %s, %s, %s, %s,
+                    %s, %s, TRUE
+                )
+                ON CONFLICT (rule_id) DO UPDATE SET
+                    module_id          = EXCLUDED.module_id,
+                    language           = EXCLUDED.language,
+                    head               = EXCLUDED.head,
+                    body               = EXCLUDED.body,
+                    stratum            = EXCLUDED.stratum,
+                    learned            = EXCLUDED.learned,
+                    weight             = EXCLUDED.weight,
+                    support            = EXCLUDED.support,
+                    precision_est      = EXCLUDED.precision_est,
+                    last_validated_at  = EXCLUDED.last_validated_at,
+                    constraints        = EXCLUDED.constraints,
+                    enabled            = TRUE,
+                    updated_at         = now()
+                """,
+                (
+                    rule.rule_id,
+                    module_id,
+                    rule.language.value,
+                    Jsonb(rule.head.model_dump(mode="python")),
+                    Jsonb([lit.model_dump(mode="python") for lit in rule.body]),
+                    rule.metadata.stratum,
+                    True,
+                    rule.metadata.weight,
+                    rule.metadata.support,
+                    rule.metadata.precision_est,
+                    rule.metadata.last_validated_at,
+                    list(rule.metadata.constraints) if rule.metadata.constraints else None,
+                ),
+            )

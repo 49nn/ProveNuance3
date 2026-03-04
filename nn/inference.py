@@ -13,12 +13,14 @@ Deterministyczny: @torch.no_grad(), brak Dropout, stały T.
 """
 from __future__ import annotations
 
+import uuid
+
 import torch
 import torch.nn.functional as F
 from torch_geometric.data import HeteroData
 
-from data_model.common import TruthDistribution
-from data_model.fact import Fact, FactProvenance, FactStatus, NeuralTraceItem
+from data_model.common import RoleArg, TruthDistribution
+from data_model.fact import Fact, FactProvenance, FactSource, FactStatus, NeuralTraceItem
 from data_model.rule import Rule
 
 from .clamp import apply_clamp
@@ -34,6 +36,20 @@ from .proposer import NeuralProposer
 from .trace import NeuralTracer
 
 TRUTH_ORDER = ("T", "F", "U")
+_CLUSTER_FACT_ROLES: dict[str, tuple[str, str]] = {
+    "customer_type": ("CUSTOMER", "TYPE"),
+    "order_status": ("ORDER", "VALUE"),
+    "payment_method": ("ORDER", "METHOD"),
+    "product_type": ("PRODUCT", "TYPE"),
+    "defective": ("ORDER", "VALUE"),
+    "store_pays_return": ("ORDER", "VALUE"),
+    "digital_consent": ("ORDER", "VALUE"),
+    "download_started_flag": ("ORDER", "VALUE"),
+    "coupon_stackable": ("COUPON", "VALUE"),
+    "account_status": ("ACCOUNT", "VALUE"),
+    "chargeback_status": ("ORDER", "VALUE"),
+    "password_shared": ("ACCOUNT", "VALUE"),
+}
 
 # Obserwowane fakty zachowują swój status — nie nadpisujemy
 _KEEP_STATUS = {FactStatus.observed, FactStatus.proved, FactStatus.rejected}
@@ -72,6 +88,8 @@ class NeuralInference:
             updated_facts:   Fact z zaktualizowanymi truth.logits, truth.value,
                              truth.confidence, provenance.neural_trace;
                              status = inferred_candidate (jeśli nie był observed/proved).
+                             Dodatkowo zawiera nowe candidate fakty wygenerowane
+                             z predykcji klastrów NN.
             updated_states:  ClusterStateRow z zaktualizowanymi logitami.
         """
         # 1. Bias pamięci encji
@@ -127,7 +145,12 @@ class NeuralInference:
             logits_cluster, node_index, cluster_states
         )
 
-        return updated_facts, updated_states
+        generated_candidates = self._generate_cluster_candidates(
+            updated_states=updated_states,
+            existing_facts=updated_facts,
+        )
+
+        return (updated_facts + generated_candidates), updated_states
 
     # ------------------------------------------------------------------
     # Dekodowanie faktów
@@ -224,6 +247,95 @@ class NeuralInference:
                 )
 
         return updated
+
+    # ------------------------------------------------------------------
+    # Generowanie nowych candidate facts
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _fact_identity(fact: Fact) -> tuple[str, tuple[tuple[str, str], ...]]:
+        values = tuple(
+            sorted((a.role, a.entity_id or a.literal_value or "") for a in fact.args)
+        )
+        return fact.predicate, values
+
+    def _generate_cluster_candidates(
+        self,
+        updated_states: list[ClusterStateRow],
+        existing_facts: list[Fact],
+    ) -> list[Fact]:
+        """
+        Tworzy nowe inferred_candidate na bazie top-1 predykcji klastrów.
+
+        Kandydat:
+          - predicate: CLUSTER_NAME.upper()
+          - args: (entity_role=entity_id, value_role=literal(top-1))
+          - truth: T z confidence top-1
+        """
+        existing_keys = {self._fact_identity(f) for f in existing_facts}
+        out: list[Fact] = []
+
+        for state in updated_states:
+            schema = self.graph_builder.schema_by_name(state.cluster_name)
+            if schema is None:
+                continue
+            if not state.logits:
+                continue
+            if state.is_clamped and state.clamp_hard:
+                # To zwykle obserwacje z tekstu/pamięci; nie generujemy z nich nowych kandydatów.
+                continue
+
+            logits = torch.tensor(state.logits[: schema.dim], dtype=torch.float32)
+            probs = F.softmax(logits, dim=-1)
+            top_idx = int(probs.argmax().item())
+            confidence = float(probs[top_idx].item())
+            if confidence < self.config.candidate_fact_threshold:
+                continue
+
+            value = schema.domain[top_idx].lower()
+            entity_role, value_role = _CLUSTER_FACT_ROLES.get(
+                state.cluster_name,
+                (schema.entity_type.upper(), "VALUE"),
+            )
+
+            args = [
+                RoleArg(role=entity_role, entity_id=state.entity_id),
+                RoleArg(role=value_role, literal_value=value),
+            ]
+            predicate = state.cluster_name.upper()
+            candidate_seed = f"{predicate}|{state.entity_id}|{value}"
+            candidate_fact = Fact(
+                fact_id=str(uuid.uuid5(uuid.NAMESPACE_URL, candidate_seed)),
+                predicate=predicate,
+                arity=len(args),
+                args=args,
+                truth=TruthDistribution(
+                    domain=["T", "F", "U"],
+                    value="T",
+                    confidence=confidence,
+                    logits={
+                        "T": confidence,
+                        "F": 1.0 - confidence,
+                        "U": 0.0,
+                    },
+                ),
+                status=FactStatus.inferred_candidate,
+                source=FactSource(
+                    source_id="nn",
+                    spans=[],
+                    extractor="NeuralInference",
+                    confidence=confidence,
+                ),
+                provenance=FactProvenance(neural_trace=[]),
+            )
+
+            key = self._fact_identity(candidate_fact)
+            if key in existing_keys:
+                continue
+            existing_keys.add(key)
+            out.append(candidate_fact)
+
+        return out
 
 
 # ---------------------------------------------------------------------------

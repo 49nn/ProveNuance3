@@ -12,8 +12,9 @@ Przepływ:
 """
 from __future__ import annotations
 
+import hashlib
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from data_model.common import ProvenanceItem, RoleArg, Span, TruthDistribution
@@ -104,7 +105,7 @@ class TextExtractor:
         entity_pos["COUPON"] = self._find_coupon_positions(text)
 
         # 4. Encje
-        entities = self._build_entities(entity_pos, date_pos)
+        entities = self._build_entities(entity_pos, date_pos, source_id)
 
         # 5. Fakty
         facts = self._extract_facts(text, entity_pos, date_pos, source_id)
@@ -113,7 +114,7 @@ class TextExtractor:
         cluster_states = self._extract_cluster_states(text, entity_pos)
 
         # Dodaj syntetyczne encje wygenerowane przez fakty
-        entities = self._add_synthetic_entities(entities, facts)
+        entities = self._add_synthetic_entities(entities, facts, source_id)
 
         return ExtractionResult(
             entities=entities,
@@ -182,40 +183,46 @@ class TextExtractor:
         self,
         entity_pos: dict[str, list[tuple[str, int]]],
         date_pos: list[tuple[str, int]],
+        source_id: str,
     ) -> list[Entity]:
-        now = datetime.now()
         seen: set[str] = set()
         entities: list[Entity] = []
 
-        def add(eid: str, etype: str, name: str) -> None:
+        def add(eid: str, etype: str, name: str, marker: str) -> None:
             if eid not in seen:
                 seen.add(eid)
                 entities.append(Entity(
                     entity_id=eid,
                     type=etype,
                     canonical_name=name,
-                    created_at=now,
+                    created_at=self._stable_timestamp(
+                        source_id,
+                        "entity",
+                        etype,
+                        eid,
+                        marker,
+                    ),
                 ))
 
         # Zawsze: implicit customer + store
-        add(IMPLICIT_CUSTOMER, "CUSTOMER", "Klient")
-        add(IMPLICIT_STORE, "STORE", "Sklep")
+        add(IMPLICIT_CUSTOMER, "CUSTOMER", "Klient", "implicit_customer")
+        add(IMPLICIT_STORE, "STORE", "Sklep", "implicit_store")
 
         # Explicit entities z tekstu
         for etype, positions in entity_pos.items():
             seen_local: set[str] = set()
-            for eid, _ in positions:
+            for eid, pos in positions:
                 if eid not in seen_local:
                     seen_local.add(eid)
-                    add(eid, etype, f"{etype} {eid}")
+                    add(eid, etype, f"{etype} {eid}", f"pos:{pos}")
 
         # DATE entities
         seen_dates: set[str] = set()
-        for date_id, _ in date_pos:
+        for date_id, pos in date_pos:
             if date_id not in seen_dates:
                 seen_dates.add(date_id)
                 date_str = date_id[2:]  # usuń "D_"
-                add(date_id, "DATE", date_str)
+                add(date_id, "DATE", date_str, f"pos:{pos}")
 
         return entities
 
@@ -223,11 +230,11 @@ class TextExtractor:
         self,
         entities: list[Entity],
         facts: list[Fact],
+        source_id: str,
     ) -> list[Entity]:
         """
         Dodaje encje syntetyczne (DEL_*, STMT_*, RET_*) wygenerowane przez fakty.
         """
-        now = datetime.now()
         seen = {e.entity_id for e in entities}
 
         for fact in facts:
@@ -246,7 +253,13 @@ class TextExtractor:
                             entity_id=eid,
                             type=etype,
                             canonical_name=eid,
-                            created_at=now,
+                            created_at=self._stable_timestamp(
+                                source_id,
+                                "synthetic_entity",
+                                etype,
+                                eid,
+                                fact.fact_id,
+                            ),
                         ))
                         seen.add(eid)
 
@@ -476,15 +489,19 @@ class TextExtractor:
         # Fallback: globalne minimum
         return min(positions, key=lambda x: abs(x[1] - pos))[0]
 
-    @staticmethod
     def _make_fact(
+        self,
         predicate: str,
         args: list[RoleArg],
         source_id: str,
         span: Span,
     ) -> Fact:
+        args_key = "|".join(
+            sorted(f"{a.role}:{a.entity_id or a.literal_value or ''}" for a in args)
+        )
+        fact_seed = f"{source_id}|{predicate}|{span.start}:{span.end}|{args_key}"
         return Fact(
-            fact_id=str(uuid.uuid4()),
+            fact_id=str(uuid.uuid5(uuid.NAMESPACE_URL, fact_seed)),
             predicate=predicate,
             arity=len(args),
             args=args,
@@ -497,6 +514,16 @@ class TextExtractor:
                 confidence=1.0,
             ),
         )
+
+    def _stable_timestamp(self, *parts: object) -> datetime:
+        """
+        Deterministyczny timestamp pochodny od source_id / pozycji / typu.
+        """
+        seed = "|".join(str(p) for p in parts)
+        digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+        seconds = int(digest[:10], 16) % (365 * 24 * 60 * 60)
+        base = datetime(self.year, 1, 1, 0, 0, 0)
+        return base + timedelta(seconds=seconds)
 
     @staticmethod
     def _fact_key(fact: Fact) -> tuple[str, ...]:

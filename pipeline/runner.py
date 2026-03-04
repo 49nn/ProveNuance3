@@ -125,6 +125,18 @@ class ProposeVerifyRunner:
             new_facts = fakty derywowane przez SV,
             proof_nodes = proof DAG.
         """
+        # Odtwórz bank bramek z aktualnego zbioru reguł (learned defaults + ab_*).
+        cluster_type_dims = {
+            cname: int(param.numel())
+            for cname, param in self.nn_inference.proposer.cluster_biases.items()
+        }
+        fact_dim = int(self.nn_inference.proposer.fact_bias.numel())
+        self.nn_inference.proposer.gate_bank = ExceptionGateBank.from_rules(
+            rules=rules,
+            cluster_type_dims=cluster_type_dims,
+            fact_dim=fact_dim,
+        )
+
         # Faza 1 — Neural
         nn_facts, nn_states = self.nn_inference.propose(
             entities, facts, rules, cluster_states

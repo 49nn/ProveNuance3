@@ -145,7 +145,7 @@ class GraphBuilder:
         edge_specs = self._build_role_of_edges(data, node_index, facts)
 
         # 4. Krawędzie z reguł nauczonych (obecnie zwykle puste — learned=false)
-        rule_specs = self._build_rule_edges(data, node_index, rules)
+        rule_specs = self._build_rule_edges(data, node_index, rules, facts)
         edge_specs.extend(rule_specs)
 
         return data, node_index, edge_specs
@@ -298,14 +298,175 @@ class GraphBuilder:
         data: HeteroData,
         node_index: GraphNodeIndex,
         rules: list[Rule],
+        facts: list[Fact],
     ) -> list[EdgeTypeSpec]:
         """
         Tworzy krawędzie tylko dla reguł z metadata.learned=True.
         Reguły hard (learned=False) obsługuje Symbolic Verifier (Clingo).
-        Obecnie wszystkie reguły w ontologii mają learned=False → pusta lista.
+        Wspierane przypadki:
+          - cluster -> cluster: body literal jest klastrem, head jest klastrem
+          - fact -> cluster:    body literal jest predykatem faktowym, head jest klastrem
         """
+        from data_model.common import ConstTerm, VarTerm
+        from data_model.rule import LiteralType
+
+        schema_by_name = {s.name: s for s in self.cluster_schemas}
+
+        # (src_type, relation, dst_type) -> (src_idx_list, dst_idx_list)
+        edge_bucket: dict[tuple[str, str, str], tuple[list[int], list[int]]] = {}
+
+        def add_edge(src_type: str, relation: str, dst_type: str, src_idx: int, dst_idx: int) -> None:
+            key = (src_type, relation, dst_type)
+            if key not in edge_bucket:
+                edge_bucket[key] = ([], [])
+            edge_bucket[key][0].append(src_idx)
+            edge_bucket[key][1].append(dst_idx)
+
+        # Fact lookup by fact_id from graph node index.
+        fact_by_id = {f.fact_id: f for f in facts}
+
+        for rule in rules:
+            if not rule.metadata.learned:
+                continue
+            if not rule.body:
+                continue
+
+            head_pred = rule.head.predicate
+            dst_schema = schema_by_name.get(head_pred)
+            if dst_schema is None:
+                # Obsługujemy tylko learned reguły, których head trafia do klastra.
+                continue
+
+            # Wybieramy pozytywne literały, bo tylko one niosą sygnał "supports/implies".
+            body_literals = [lit for lit in rule.body if lit.literal_type == LiteralType.pos]
+            if not body_literals:
+                continue
+
+            # 1) Cluster -> cluster (implies)
+            for lit in body_literals:
+                src_schema = schema_by_name.get(lit.predicate)
+                if src_schema is None:
+                    continue
+
+                src_map = node_index.cluster_node_to_idx.get(src_schema.name, {})
+                dst_map = node_index.cluster_node_to_idx.get(dst_schema.name, {})
+                if not src_map or not dst_map:
+                    continue
+
+                for entity_id, src_idx in src_map.items():
+                    dst_idx = dst_map.get(entity_id)
+                    if dst_idx is not None:
+                        add_edge(
+                            f"c_{src_schema.name}",
+                            "implies",
+                            f"c_{dst_schema.name}",
+                            src_idx,
+                            dst_idx,
+                        )
+
+            # 2) Fact -> cluster (supports)
+            # Groundujemy literał body względem istniejących faktów i mapujemy zmienne
+            # na role head, aby uzyskać docelową encję klastra.
+            for lit in body_literals:
+                if lit.predicate in schema_by_name:
+                    continue  # to był przypadek cluster->cluster
+
+                dst_map = node_index.cluster_node_to_idx.get(dst_schema.name, {})
+                if not dst_map:
+                    continue
+
+                for fact_idx, fact_id in node_index.idx_to_fact_node.items():
+                    fact = fact_by_id.get(fact_id)
+                    if fact is None:
+                        continue
+                    if fact.predicate != lit.predicate:
+                        continue
+
+                    role_map: dict[str, str] = {}
+                    for arg in fact.args:
+                        val = arg.entity_id or arg.literal_value
+                        if val is not None:
+                            role_map[arg.role.upper()] = val
+
+                    subst: dict[str, str] = {}
+                    matched = True
+                    for rule_arg in lit.args:
+                        role = rule_arg.role.upper()
+                        fact_val = role_map.get(role)
+                        if fact_val is None:
+                            matched = False
+                            break
+                        term = rule_arg.term
+                        if isinstance(term, VarTerm):
+                            if term.var == "_":
+                                continue
+                            existing = subst.get(term.var)
+                            if existing is None:
+                                subst[term.var] = fact_val
+                            elif existing != fact_val:
+                                matched = False
+                                break
+                        elif isinstance(term, ConstTerm):
+                            if fact_val != term.const:
+                                matched = False
+                                break
+                    if not matched:
+                        continue
+
+                    target_entity_id: str | None = None
+                    for head_arg in rule.head.args:
+                        if head_arg.role.upper() != dst_schema.entity_type.upper():
+                            continue
+                        term = head_arg.term
+                        if isinstance(term, VarTerm):
+                            target_entity_id = subst.get(term.var)
+                        elif isinstance(term, ConstTerm):
+                            target_entity_id = term.const
+                        break
+
+                    if target_entity_id is None:
+                        continue
+                    dst_idx = dst_map.get(target_entity_id)
+                    if dst_idx is None:
+                        continue
+
+                    add_edge("fact", "supports", f"c_{dst_schema.name}", fact_idx, dst_idx)
+
         specs: list[EdgeTypeSpec] = []
-        # TODO: obsługa learned=True gdy zostaną dodane nauczone reguły
+        for (src_type, relation, dst_type), (src_list, dst_list) in edge_bucket.items():
+            if not src_list:
+                continue
+
+            # Dedup krawędzi dla stabilnego edge_index.
+            unique_pairs = sorted(set(zip(src_list, dst_list)))
+            src_idx = [p[0] for p in unique_pairs]
+            dst_idx = [p[1] for p in unique_pairs]
+
+            data[src_type, relation, dst_type].edge_index = torch.tensor(
+                [src_idx, dst_idx],
+                dtype=torch.long,
+            )
+
+            if src_type == "fact":
+                src_dim = self.FACT_DIM
+            else:
+                src_cluster = src_type[2:] if src_type.startswith("c_") else src_type
+                src_schema = schema_by_name[src_cluster]
+                src_dim = src_schema.dim
+
+            dst_cluster = dst_type[2:] if dst_type.startswith("c_") else dst_type
+            dst_dim = schema_by_name[dst_cluster].dim if dst_cluster in schema_by_name else self.FACT_DIM
+
+            specs.append(
+                EdgeTypeSpec(
+                    src_type=src_type,
+                    relation=relation,
+                    dst_type=dst_type,
+                    src_dim=src_dim,
+                    dst_dim=dst_dim,
+                )
+            )
+
         return specs
 
     # ------------------------------------------------------------------

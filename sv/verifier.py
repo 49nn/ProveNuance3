@@ -13,23 +13,26 @@ Przepływ:
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
-
-import clingo
 
 from data_model.common import RoleArg, TruthDistribution
 from data_model.fact import Fact, FactProvenance, FactStatus
 from data_model.rule import Rule
 from nn.graph_builder import ClusterSchema, ClusterStateRow
 from sv.converter import IdRegistry, cluster_to_lp, fact_to_lp, symbol_to_atom
-from sv.proof import ProofRun, build_proof_run, extract_proof_dag
+from sv.proof import ProofRun, build_proof_run, extract_proof_dag, ground_rule
 from sv.runner import build_program, solve
 from sv.schema import DEFAULT_CLUSTER_ROLES, PREDICATE_POSITIONS
+from sv.stratification import validate_stratification
 from sv.types import GroundAtom, VerifyResult
 
 
 # Statusy niepodlegające nadpisaniu przez verifier (jak w nn/inference.py)
-_KEEP_STATUS = {FactStatus.observed, FactStatus.proved, FactStatus.rejected}
+_KEEP_STATUS = {
+    FactStatus.observed,
+    FactStatus.proved,
+    FactStatus.rejected,
+    FactStatus.retracted,
+}
 
 
 class SymbolicVerifier:
@@ -92,6 +95,9 @@ class SymbolicVerifier:
         # Połączone mapowanie ról: bazowe + derywowane z głów reguł
         all_positions = {**self.predicate_positions, **self._derived_positions(rules)}
 
+        # 0. Fail-fast: negacja musi być stratyfikowana.
+        validate_stratification(rules)
+
         # 1. Konwersja do LP strings (all_positions dla observed/proved/inferred_candidate)
         fact_lp_list, atom_to_fact_id = self._facts_to_lp(facts, registry, all_positions)
         cluster_lp_list = self._clusters_to_lp(cluster_states, registry)
@@ -144,20 +150,62 @@ class SymbolicVerifier:
         Buduje serializowalny ProofRun z wyników verify().
         Oddzielona metoda — nie zawsze potrzeba pełnego ProofRun.
         """
-        atom_to_fact_id = {
-            atom: fact.fact_id
-            for fact in result.updated_facts
-            for atom, fid in [(a, a) for a in result.derived_atoms]
-            if fid == fact.fact_id
-        }
+        all_positions = {**self.predicate_positions, **self._derived_positions(rules)}
+        registry = IdRegistry()
+        atom_to_fact_id: dict[GroundAtom, str] = {}
+        for fact in (result.updated_facts + result.new_facts):
+            atom = self._fact_to_ground_atom(fact, registry, all_positions)
+            if atom is not None:
+                atom_to_fact_id[atom] = fact.fact_id
+
         rules_index = {r.rule_id: r for r in rules}
         return build_proof_run(
             result.proof_nodes,
             query_atoms,
             atom_to_fact_id,
-            id_map={},
+            id_map=registry.mapping(),
             rules_index=rules_index,
         )
+
+    def classify_query_atom(
+        self,
+        query_atom: GroundAtom,
+        result: VerifyResult,
+        rules: list[Rule],
+    ) -> str:
+        """
+        Klasyfikuje wynik zapytania:
+          - proved: atom jest w modelu
+          - blocked: istnieje ground reguła dla celu, ale NAF jest naruszone
+          - not_proved: istnieją reguły dla celu, ale nie udało się wyprowadzić
+          - unknown: brak reguł i brak atomu w modelu
+        """
+        model = set(result.derived_atoms)
+        if query_atom in model:
+            return "proved"
+
+        has_rule_for_head = False
+        blocked = False
+        for rule in rules:
+            if rule.head.predicate != query_atom.predicate:
+                continue
+            has_rule_for_head = True
+            for grounded in ground_rule(rule, model):
+                if grounded.head != query_atom:
+                    continue
+                if not all(a in model for a in grounded.pos_body):
+                    continue
+                if any(self._naf_violated(naf_atom, result.derived_atoms) for naf_atom in grounded.neg_body):
+                    blocked = True
+                    break
+            if blocked:
+                break
+
+        if blocked:
+            return "blocked"
+        if has_rule_for_head:
+            return "not_proved"
+        return "unknown"
 
     # ------------------------------------------------------------------
     # Prywatne metody pomocnicze
@@ -244,8 +292,10 @@ class SymbolicVerifier:
     ) -> list[Fact]:
         """
         Aktualizuje statusy faktów:
-          - inferred_candidate + atom w derived → proved
-          - observed / proved / rejected          → bez zmian
+          - inferred_candidate + atom w derived + reguła dowodu   → proved (+proof_id)
+          - inferred_candidate + atom w derived (fakt bazowy)     → proved
+          - inferred_candidate + brak atomu w modelu              → inferred_candidate
+          - observed / proved / rejected / retracted              → bez zmian
         Używa model_copy() (Pydantic immutability).
         """
         fact_id_to_atom: dict[str, GroundAtom] = {v: k for k, v in atom_to_fact_id.items()}
@@ -257,9 +307,9 @@ class SymbolicVerifier:
                 continue
 
             atom = fact_id_to_atom.get(fact.fact_id)
-            if atom is not None and atom in derived and atom in proof_nodes:
-                node = proof_nodes[atom]
-                if node.rule_id is not None:  # naprawdę derywowany przez regułę
+            if atom is not None and atom in derived:
+                node = proof_nodes.get(atom)
+                if node is not None and node.rule_id is not None:  # derywowany przez regułę
                     provenance = (fact.provenance or FactProvenance()).model_copy(
                         update={"proof_id": node.rule_id}
                     )
@@ -267,11 +317,31 @@ class SymbolicVerifier:
                         "status":     FactStatus.proved,
                         "provenance": provenance,
                     }))
-                    continue
+                else:
+                    # Faktu nie wyprowadziła reguła, ale jest obecny w modelu
+                    # (np. jako ekstensionalny atom bazowy).
+                    updated.append(fact.model_copy(update={"status": FactStatus.proved}))
+                continue
 
             updated.append(fact)
 
         return updated
+
+    @staticmethod
+    def _naf_violated(
+        naf_atom: GroundAtom,
+        derived: frozenset[GroundAtom],
+    ) -> bool:
+        """
+        True gdy istnieje atom w modelu pasujący do częściowego atomu NAF.
+        """
+        required = set(naf_atom.bindings)
+        for atom in derived:
+            if atom.predicate != naf_atom.predicate:
+                continue
+            if required.issubset(atom.bindings):
+                return True
+        return False
 
     def _make_new_facts(
         self,

@@ -93,6 +93,28 @@ def upsert_fact(conn: psycopg.Connection, fact: Fact, case_id_int: int) -> None:
                 )
 
 
+def attach_proof_run_to_facts(
+    conn: psycopg.Connection,
+    fact_ids: list[str],
+    proof_id: str,
+    case_id_int: int,
+) -> None:
+    unique_fact_ids = list(dict.fromkeys(fid for fid in fact_ids if fid))
+    if not unique_fact_ids:
+        return
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE facts
+            SET proof_id = %s
+            WHERE case_id = %s
+              AND fact_id = ANY(%s)
+            """,
+            (proof_id, case_id_int, unique_fact_ids),
+        )
+
+
 def load_facts_for_case(conn: psycopg.Connection, case_id: str) -> list[Fact]:
     with conn.cursor() as cur:
         cur.execute(

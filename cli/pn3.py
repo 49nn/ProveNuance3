@@ -89,23 +89,30 @@ def cmd_facts(_args: argparse.Namespace) -> None:
     with connect() as conn, conn.cursor() as cur:
         cur.execute("""
             SELECT
+                c.case_id,
                 f.fact_id,
                 f.predicate,
                 f.arity,
                 f.status,
                 f.truth_value,
                 f.truth_confidence,
-                COUNT(fa.position)  AS n_args,
+                COUNT(DISTINCT fa.position) AS n_args,
                 f.source_id,
+                f.source_extractor,
+                f.proof_id,
+                COUNT(DISTINCT fnt.id) AS n_trace,
                 f.created_at
             FROM facts f
+            LEFT JOIN cases c ON c.id = f.case_id
             LEFT JOIN fact_args fa ON fa.fact_id = f.id
-            GROUP BY f.id
+            LEFT JOIN fact_neural_trace fnt ON fnt.fact_id = f.id
+            GROUP BY c.case_id, f.id
             ORDER BY f.id
         """)
         rows = cur.fetchall()
 
     table = Table(title="Facts", header_style="bold cyan", show_lines=False)
+    table.add_column("case_id",    style="dim", no_wrap=True)
     table.add_column("fact_id",    style="bold yellow", no_wrap=True)
     table.add_column("predicate",  style="cyan")
     table.add_column("arity",      justify="right", style="dim")
@@ -114,20 +121,30 @@ def cmd_facts(_args: argparse.Namespace) -> None:
     table.add_column("truth",      justify="center")
     table.add_column("conf",       justify="right", style="dim")
     table.add_column("source",     style="dim", no_wrap=True)
+    table.add_column("extractor",  style="dim", no_wrap=True)
+    table.add_column("proof_id",   style="dim", no_wrap=True)
+    table.add_column("trace",      justify="right", style="dim")
     table.add_column("created_at", style="dim", no_wrap=True)
 
-    for fact_id, predicate, arity, status, truth_val, conf, n_args, source_id, created_at in rows:
+    for (
+        case_id, fact_id, predicate, arity, status, truth_val, conf,
+        n_args, source_id, source_extractor, proof_id, n_trace, created_at,
+    ) in rows:
         s_style = _STATUS_STYLE.get(status, "")
         status_text = Text(status, style=s_style)
         table.add_row(
+            case_id or "-",
             fact_id,
             predicate,
-            str(arity) if arity is not None else "–",
+            str(arity) if arity is not None else "-",
             str(n_args),
             status_text,
-            truth_val or "–",
-            f"{conf:.2f}" if conf is not None else "–",
-            source_id or "–",
+            truth_val or "-",
+            f"{conf:.2f}" if conf is not None else "-",
+            source_id or "-",
+            source_extractor or "-",
+            proof_id or "-",
+            str(n_trace),
             str(created_at)[:19],
         )
 
@@ -424,6 +441,27 @@ def cmd_cases(_args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# run-case
+# ---------------------------------------------------------------------------
+
+def cmd_run_case(args: argparse.Namespace) -> None:
+    from db import DBSession
+    from pipeline.runner import ProposeVerifyRunner
+
+    case_id = args.case_id
+    with DBSession.connect() as session:
+        schemas = session.load_cluster_schemas()
+        entities, facts, rules, cluster_states = session.load_case(case_id)
+
+        runner = ProposeVerifyRunner.from_schemas(schemas)
+        result = runner.run(entities, facts, rules, cluster_states)
+        session.save_pipeline_result(result, case_id=case_id)
+
+    console.print(f"[bold green]run-case completed[/bold green]: {case_id}")
+    console.print(result.summary())
+
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -437,6 +475,7 @@ _COMMANDS = {
     "entities":      (cmd_entities,      "List entity instances"),
     "facts":         (cmd_facts,         "List facts"),
     "rules":         (cmd_rules,         "List rules"),
+    "run-case":      (cmd_run_case,      "Run full pipeline for one case_id and save results"),
 }
 
 
@@ -448,7 +487,9 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
     sub.required = True
     for name, (_, help_text) in _COMMANDS.items():
-        sub.add_parser(name, help=help_text)
+        cmd_parser = sub.add_parser(name, help=help_text)
+        if name == "run-case":
+            cmd_parser.add_argument("case_id", help="Case ID, e.g. TC-001")
 
     args = parser.parse_args()
 

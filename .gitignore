@@ -13,3 +13,6 @@ __pycache__/
 # Generated articles
 articleG.md
 article.md
+
+# Local planning docs
+docs/backlog.md
