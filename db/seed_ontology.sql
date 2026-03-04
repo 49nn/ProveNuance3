@@ -296,8 +296,8 @@ INSERT INTO rules (rule_id, module_id, head, body, clingo_text, stratum, learned
 ('contract.contract_formed',
     (SELECT id FROM rule_modules WHERE name='contract'),
     '{"predicate":"contract_formed","args":[{"role":"ORDER","term":{"var":"O"}}]}',
-    '[{"literal_type":"pos","predicate":"order_accepted","args":[{"role":"STORE","term":{"const":"store"}},{"role":"ORDER","term":{"var":"O"}},{"role":"DATE","term":{"var":"_"}}]}]',
-    'contract_formed(O) :- order_accepted(store,O,_).',
+    '[{"literal_type":"pos","predicate":"order_accepted","args":[{"role":"STORE","term":{"var":"_"}},{"role":"ORDER","term":{"var":"O"}},{"role":"DATE","term":{"var":"_"}}]}]',
+    'contract_formed(O) :- order_accepted(_,O,_).',
     0, false),
 
 -- §2.3 Prepaid

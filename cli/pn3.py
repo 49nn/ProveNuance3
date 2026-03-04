@@ -2,8 +2,14 @@
 """pn3 – ProveNuance3 command-line interface."""
 
 import argparse
+import json
+import math
 import os
+from pathlib import Path
+import shutil
+import subprocess
 import sys
+from dataclasses import replace
 
 import psycopg2
 from rich.console import Console
@@ -96,59 +102,73 @@ def cmd_facts(_args: argparse.Namespace) -> None:
                 f.status,
                 f.truth_value,
                 f.truth_confidence,
-                COUNT(DISTINCT fa.position) AS n_args,
+                (
+                    SELECT COUNT(*)
+                    FROM fact_args fa
+                    WHERE fa.fact_id = f.id
+                ) AS n_args,
+                (
+                    SELECT string_agg(
+                        fa.role || '=' || COALESCE(fa.entity_id, fa.literal_value),
+                        ', '
+                        ORDER BY fa.position
+                    )
+                    FROM fact_args fa
+                    WHERE fa.fact_id = f.id
+                ) AS args_list,
                 f.source_id,
                 f.source_extractor,
                 f.proof_id,
-                COUNT(DISTINCT fnt.id) AS n_trace,
+                (
+                    SELECT pr.result
+                    FROM proof_runs pr
+                    WHERE pr.proof_id = f.proof_id
+                    ORDER BY pr.id DESC
+                    LIMIT 1
+                ) AS proof_value,
+                (
+                    SELECT COUNT(*)
+                    FROM fact_neural_trace fnt
+                    WHERE fnt.fact_id = f.id
+                ) AS n_trace,
                 f.created_at
             FROM facts f
             LEFT JOIN cases c ON c.id = f.case_id
-            LEFT JOIN fact_args fa ON fa.fact_id = f.id
-            LEFT JOIN fact_neural_trace fnt ON fnt.fact_id = f.id
-            GROUP BY c.case_id, f.id
             ORDER BY f.id
         """)
         rows = cur.fetchall()
 
-    table = Table(title="Facts", header_style="bold cyan", show_lines=False)
-    table.add_column("case_id",    style="dim", no_wrap=True)
-    table.add_column("fact_id",    style="bold yellow", no_wrap=True)
-    table.add_column("predicate",  style="cyan")
-    table.add_column("arity",      justify="right", style="dim")
-    table.add_column("args",       justify="right", style="dim")
-    table.add_column("status",     no_wrap=True)
-    table.add_column("truth",      justify="center")
-    table.add_column("conf",       justify="right", style="dim")
-    table.add_column("source",     style="dim", no_wrap=True)
-    table.add_column("extractor",  style="dim", no_wrap=True)
-    table.add_column("proof_id",   style="dim", no_wrap=True)
-    table.add_column("trace",      justify="right", style="dim")
-    table.add_column("created_at", style="dim", no_wrap=True)
+    console.print("[bold cyan]Facts[/bold cyan]")
+    if not rows:
+        console.print("[dim]0 row(s)[/dim]")
+        return
 
-    for (
+    for i, (
         case_id, fact_id, predicate, arity, status, truth_val, conf,
-        n_args, source_id, source_extractor, proof_id, n_trace, created_at,
-    ) in rows:
+        n_args, args_list, source_id, source_extractor, proof_id, proof_value, n_trace, created_at,
+    ) in enumerate(rows, start=1):
         s_style = _STATUS_STYLE.get(status, "")
         status_text = Text(status, style=s_style)
-        table.add_row(
-            case_id or "-",
-            fact_id,
-            predicate,
-            str(arity) if arity is not None else "-",
-            str(n_args),
-            status_text,
-            truth_val or "-",
-            f"{conf:.2f}" if conf is not None else "-",
-            source_id or "-",
-            source_extractor or "-",
-            proof_id or "-",
-            str(n_trace),
-            str(created_at)[:19],
-        )
+        conf_text = f"{conf:.2f}" if conf is not None else "-"
 
-    console.print(table)
+        header = Text(f"{i}. ", style="dim")
+        header.append(fact_id, style="bold yellow")
+        header.append(" ")
+        header.append(predicate, style="cyan")
+        console.print(header)
+        console.print("  case:", case_id or "-", " status:", status_text, f" truth: {truth_val or '-'} ({conf_text})")
+        console.print(
+            "  arity:",
+            str(arity) if arity is not None else "-",
+            f" args: {n_args} [{args_list or '-'}] source: {source_id or '-'} extractor: {source_extractor or '-'}",
+        )
+        console.print(
+            f"  proof: {proof_value or '-'} proof_id: {proof_id or '-'} "
+            f"trace: {n_trace} created_at: {str(created_at)[:19]}"
+        )
+        if i < len(rows):
+            console.print()
+
     console.print(f"[dim]{len(rows)} row(s)[/dim]")
 
 
@@ -175,31 +195,31 @@ def cmd_rules(_args: argparse.Namespace) -> None:
         """)
         rows = cur.fetchall()
 
-    table = Table(title="Rules", header_style="bold cyan", show_lines=False)
-    table.add_column("rule_id",    style="bold yellow", no_wrap=True)
-    table.add_column("module",     style="cyan")
-    table.add_column("stratum",    justify="right")
-    table.add_column("enabled",    justify="center")
-    table.add_column("learned",    justify="center")
-    table.add_column("weight",     justify="right", style="dim")
-    table.add_column("precision",  justify="right", style="dim")
-    table.add_column("support",    justify="right", style="dim")
-    table.add_column("created_at", style="dim", no_wrap=True)
+    console.print("[bold cyan]Rules[/bold cyan]")
+    if not rows:
+        console.print("[dim]0 row(s)[/dim]")
+        return
 
-    for rule_id, module, stratum, enabled, learned, weight, precision, support, created_at in rows:
-        table.add_row(
-            rule_id,
-            module,
-            str(stratum),
-            Text("✓", style="green") if enabled  else Text("✗", style="red"),
-            Text("✓", style="yellow") if learned else Text("–", style="dim"),
-            f"{weight:.3f}"    if weight    is not None else "–",
-            f"{precision:.2f}" if precision is not None else "–",
-            str(support)       if support   is not None else "–",
-            str(created_at)[:19],
+    for i, (
+        rule_id, module, stratum, enabled, learned, weight, precision, support, created_at
+    ) in enumerate(rows, start=1):
+        header = Text(f"{i}. ", style="dim")
+        header.append(rule_id, style="bold yellow")
+        console.print(header)
+        console.print(
+            f"  module: {module} stratum: {stratum} "
+            f"enabled: {'yes' if enabled else 'no'} "
+            f"learned: {'yes' if learned else 'no'}"
         )
+        console.print(
+            f"  weight: {f'{weight:.3f}' if weight is not None else '-'} "
+            f"precision: {f'{precision:.2f}' if precision is not None else '-'} "
+            f"support: {str(support) if support is not None else '-'} "
+            f"created_at: {str(created_at)[:19]}"
+        )
+        if i < len(rows):
+            console.print()
 
-    console.print(table)
     console.print(f"[dim]{len(rows)} row(s)[/dim]")
 
 
@@ -441,6 +461,724 @@ def cmd_cases(_args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# proof
+# ---------------------------------------------------------------------------
+
+def _coerce_json(value):
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+def _dot_escape(value: str) -> str:
+    # Keep backslash escapes like "\n" intact for Graphviz line breaks.
+    return (
+        value
+        .replace('"', '\\"')
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\n", "\\n")
+    )
+
+
+def _build_proof_dot(
+    proof_id: str,
+    case_id: str,
+    query: str,
+    result: str,
+    dag_map: dict,
+) -> str:
+    node_ids: dict[str, str] = {}
+    node_order: list[str] = []
+
+    def get_node_id(atom: str) -> str:
+        if atom not in node_ids:
+            node_ids[atom] = f"n{len(node_ids)}"
+            node_order.append(atom)
+        return node_ids[atom]
+
+    # Register all nodes first (including body/naf leaves not present in dag keys).
+    for atom, node in dag_map.items():
+        get_node_id(str(atom))
+        if isinstance(node, dict):
+            for dep in node.get("body_atoms", []) or []:
+                get_node_id(str(dep))
+            for dep in node.get("naf_atoms", []) or []:
+                get_node_id(str(dep))
+
+    lines: list[str] = [
+        "digraph ProofDAG {",
+        "  rankdir=LR;",
+        '  graph [fontname="Helvetica", fontsize=11, labeljust="l", labelloc="t"];',
+        '  node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=10, color="#666666"];',
+        '  edge [fontname="Helvetica", fontsize=9, color="#444444"];',
+        (
+            f'  label="Proof DAG\\nproof_id={_dot_escape(proof_id)}'
+            f'\\ncase={_dot_escape(case_id)}'
+            f'\\nquery={_dot_escape(query)}'
+            f'\\nresult={_dot_escape(result)}";'
+        ),
+        "",
+    ]
+
+    for atom in node_order:
+        node = dag_map.get(atom, {})
+        status = str(node.get("status", "external")) if isinstance(node, dict) else "external"
+        rule_id = str(node.get("rule_id") or "-") if isinstance(node, dict) else "-"
+
+        if status == "derived":
+            fill = "#E8F7E8"
+        elif status == "base":
+            fill = "#EFEFEF"
+        else:
+            fill = "#FFF8D9"
+
+        label = f"{atom}\\nstatus={status}\\nrule={rule_id}"
+        lines.append(
+            f'  {get_node_id(atom)} [label="{_dot_escape(label)}", fillcolor="{fill}"];'
+        )
+
+    lines.append("")
+    for atom, node in dag_map.items():
+        if not isinstance(node, dict):
+            continue
+        dst = get_node_id(str(atom))
+        for dep in node.get("body_atoms", []) or []:
+            src = get_node_id(str(dep))
+            lines.append(f"  {src} -> {dst};")
+        for dep in node.get("naf_atoms", []) or []:
+            src = get_node_id(str(dep))
+            lines.append(f'  {src} -> {dst} [style="dashed", color="#AA3333", label="not"];')
+
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def _resolve_graphviz_engine(engine: str) -> str | None:
+    # 1) PATH lookup by command name (or explicit executable name).
+    resolved = shutil.which(engine)
+    if resolved:
+        return resolved
+
+    # 2) Explicit path supplied by user.
+    engine_path = Path(engine)
+    if engine_path.exists():
+        return str(engine_path)
+
+    # 3) Environment hints.
+    for env_name in ("GRAPHVIZ_DOT", "DOT_BINARY"):
+        env_path = os.getenv(env_name)
+        if env_path and Path(env_path).exists():
+            return env_path
+
+    # 4) Typical Windows install paths.
+    roots = [
+        os.getenv("ProgramFiles"),
+        os.getenv("ProgramFiles(x86)"),
+        os.getenv("ChocolateyInstall"),
+    ]
+    candidates: list[Path] = []
+    for root in roots:
+        if not root:
+            continue
+        root_path = Path(root)
+        candidates.extend([
+            root_path / "Graphviz" / "bin" / f"{engine}.exe",
+            root_path / "bin" / f"{engine}.exe",
+        ])
+
+    # Fallback hardcoded common locations.
+    candidates.extend([
+        Path(r"C:\Program Files\Graphviz\bin") / f"{engine}.exe",
+        Path(r"C:\Program Files (x86)\Graphviz\bin") / f"{engine}.exe",
+        Path(r"C:\ProgramData\chocolatey\bin") / f"{engine}.exe",
+    ])
+
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+
+    return None
+
+
+def _build_case_network_dot(
+    case_id: str,
+    data,
+    node_index,
+    schemas,
+    facts,
+    include_entities: bool = True,
+) -> str:
+    schema_by_name = {s.name: s for s in schemas}
+    fact_by_id = {f.fact_id: f for f in facts}
+
+    dot_ids: dict[str, str] = {}
+
+    def get_dot_id(key: str) -> str:
+        if key not in dot_ids:
+            dot_ids[key] = f"n{len(dot_ids)}"
+        return dot_ids[key]
+
+    lines: list[str] = [
+        "digraph CaseNetwork {",
+        "  rankdir=LR;",
+        "  splines=true;",
+        '  graph [fontname="Helvetica", fontsize=11, labeljust="l", labelloc="t"];',
+        '  node [fontname="Helvetica", fontsize=10, color="#666666"];',
+        '  edge [fontname="Helvetica", fontsize=9, color="#444444"];',
+        f'  label="Case Network\\ncase_id={_dot_escape(case_id)}";',
+        "",
+    ]
+
+    entity_ids: set[str] = set()
+    for cmap in node_index.cluster_node_to_idx.values():
+        entity_ids.update(cmap.keys())
+    for fact in facts:
+        for arg in fact.args:
+            if arg.entity_id:
+                entity_ids.add(arg.entity_id)
+
+    if include_entities:
+        for eid in sorted(entity_ids):
+            nid = get_dot_id(f"entity:{eid}")
+            label = f"ENTITY\\n{eid}"
+            lines.append(
+                f'  {nid} [shape=ellipse, style="filled", fillcolor="#EAF2FF", label="{_dot_escape(label)}"];'
+            )
+
+    for fid in sorted(node_index.fact_node_to_idx.keys()):
+        fact = fact_by_id.get(fid)
+        nid = get_dot_id(f"fact:{fid}")
+        if fact is None:
+            label = f"FACT\\n{fid}"
+            status_val = "-"
+        else:
+            status_val = fact.status.value
+            label = f"FACT\\n{fid}\\n{fact.predicate}\\nstatus={status_val}"
+        fill = "#E8F7E8" if status_val == "proved" else "#FFF4DD"
+        lines.append(
+            f'  {nid} [shape=box, style="rounded,filled", fillcolor="{fill}", label="{_dot_escape(label)}"];'
+        )
+
+    for schema in schemas:
+        cname = schema.name
+        node_type = f"c_{cname}"
+        idx_to_entity = node_index.idx_to_cluster_node.get(cname, {})
+        if not idx_to_entity:
+            continue
+
+        logits = data[node_type].x
+        is_clamped = data[node_type].get("is_clamped")
+        clamp_hard = data[node_type].get("clamp_hard")
+
+        for idx, eid in idx_to_entity.items():
+            idx_int = int(idx)
+            logit_row = logits[idx_int].tolist() if logits.size(0) > idx_int else []
+            top_info = "-"
+            if logit_row:
+                top_idx = max(range(len(logit_row)), key=lambda i: float(logit_row[i]))
+                top_val = schema.domain[top_idx] if top_idx < len(schema.domain) else str(top_idx)
+                vals = [math.exp(float(v)) for v in logit_row]
+                denom = sum(vals) or 1.0
+                conf = vals[top_idx] / denom
+                top_info = f"{top_val} ({conf:.2f})"
+
+            clamped = False
+            if is_clamped is not None and is_clamped.size(0) > idx_int:
+                clamped = bool(is_clamped[idx_int].item())
+            hard = False
+            if clamp_hard is not None and clamp_hard.size(0) > idx_int:
+                hard = bool(clamp_hard[idx_int].item())
+
+            nid = get_dot_id(f"cluster:{cname}:{eid}")
+            label = (
+                f"CLUSTER\\n{cname}\\nentity={eid}\\n"
+                f"top={top_info}\\nclamped={'yes' if clamped else 'no'}"
+                f"{' hard' if hard else ''}"
+            )
+            fill = "#E6FBF2" if clamped else "#F0FFF8"
+            lines.append(
+                f'  {nid} [shape=component, style="filled", fillcolor="{fill}", label="{_dot_escape(label)}"];'
+            )
+            if include_entities:
+                e_node = get_dot_id(f"entity:{eid}")
+                lines.append(f'  {e_node} -> {nid} [color="#99AACC", label="state"];')
+
+    for fact in facts:
+        dst = get_dot_id(f"fact:{fact.fact_id}")
+        for arg in fact.args:
+            if include_entities and arg.entity_id:
+                src = get_dot_id(f"entity:{arg.entity_id}")
+                lines.append(
+                    f'  {src} -> {dst} [color="#808080", label="{_dot_escape(arg.role)}"];'
+                )
+
+    for src_type, relation, dst_type in data.edge_types:
+        edge_index = data[src_type, relation, dst_type].edge_index
+        n_edges = edge_index.size(1) if edge_index is not None else 0
+        for e in range(n_edges):
+            src_idx = int(edge_index[0, e].item())
+            dst_idx = int(edge_index[1, e].item())
+
+            src_key: str | None = None
+            dst_key: str | None = None
+
+            if src_type == "fact":
+                fid = node_index.idx_to_fact_node.get(src_idx)
+                if fid is not None:
+                    src_key = f"fact:{fid}"
+            elif src_type.startswith("c_"):
+                cname = src_type[2:]
+                eid = node_index.idx_to_cluster_node.get(cname, {}).get(src_idx)
+                if eid is not None:
+                    src_key = f"cluster:{cname}:{eid}"
+
+            if dst_type == "fact":
+                fid = node_index.idx_to_fact_node.get(dst_idx)
+                if fid is not None:
+                    dst_key = f"fact:{fid}"
+            elif dst_type.startswith("c_"):
+                cname = dst_type[2:]
+                eid = node_index.idx_to_cluster_node.get(cname, {}).get(dst_idx)
+                if eid is not None:
+                    dst_key = f"cluster:{cname}:{eid}"
+
+            if src_key is None or dst_key is None:
+                continue
+
+            src = get_dot_id(src_key)
+            dst = get_dot_id(dst_key)
+
+            if relation == "implies":
+                style = 'color="#1F77B4", penwidth=1.7'
+            elif relation == "supports":
+                style = 'color="#A15C00", style="dashed"'
+            else:
+                style = 'color="#3A7A3A"'
+
+            lines.append(
+                f'  {src} -> {dst} [{style}, label="{_dot_escape(relation)}"];'
+            )
+
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def cmd_proof(args: argparse.Namespace) -> None:
+    proof_id = args.proof_id
+
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                pr.id,
+                pr.proof_id,
+                c.case_id,
+                pr.query,
+                pr.result,
+                pr.created_at,
+                pr.proof_dag
+            FROM proof_runs pr
+            JOIN cases c ON c.id = pr.case_id
+            WHERE pr.proof_id = %s
+            """,
+            (proof_id,),
+        )
+        run_row = cur.fetchone()
+
+        if run_row is None:
+            console.print(f"[bold red]proof not found[/bold red]: {proof_id}")
+            return
+
+        run_id, run_proof_id, case_id, query, result, created_at, proof_dag = run_row
+
+        cur.execute(
+            """
+            SELECT fact_id, predicate, status
+            FROM facts
+            WHERE proof_id = %s
+            ORDER BY id
+            """,
+            (proof_id,),
+        )
+        fact_rows = cur.fetchall()
+
+        cur.execute(
+            """
+            SELECT ps.step_order, ps.rule_id, ps.substitution, ps.used_fact_ids
+            FROM proof_steps ps
+            WHERE ps.run_id = %s
+            ORDER BY ps.step_order
+            """,
+            (run_id,),
+        )
+        step_rows = cur.fetchall()
+
+    dag_obj = _coerce_json(proof_dag)
+    dag_map = dag_obj if isinstance(dag_obj, dict) else {}
+
+    def _sub_key(value) -> str:
+        obj = _coerce_json(value) or {}
+        if not isinstance(obj, dict):
+            return "-"
+        return json.dumps(obj, sort_keys=True, ensure_ascii=False)
+
+    # Best-effort map step -> (atom, status) using (rule_id, substitution).
+    step_atom_index: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for atom, node in dag_map.items():
+        if not isinstance(node, dict):
+            continue
+        key = (
+            str(node.get("rule_id") or ""),
+            _sub_key(node.get("substitution")),
+        )
+        status = str(node.get("status") or "-")
+        step_atom_index.setdefault(key, []).append((str(atom), status))
+
+    console.print("[bold cyan]Proof Run[/bold cyan]")
+    console.print(f"proof_id: {run_proof_id}")
+    console.print(f"case_id: {case_id}")
+    console.print(f"query: {query}")
+    console.print(f"result: {result}")
+    console.print(f"created_at: {str(created_at)[:19]}")
+    console.print(f"steps: {len(step_rows)} linked_facts: {len(fact_rows)}")
+
+    console.print()
+    console.print("[bold cyan]Linked Facts[/bold cyan]")
+    if not fact_rows:
+        console.print("[dim]-[/dim]")
+    else:
+        for i, (fact_id, predicate, status) in enumerate(fact_rows, start=1):
+            status_text = Text(status, style=_STATUS_STYLE.get(status, ""))
+            console.print(f"{i}. {fact_id} {predicate} ", status_text)
+
+    console.print()
+    console.print("[bold cyan]Proof Steps[/bold cyan]")
+    if not step_rows:
+        console.print("[dim]-[/dim]")
+    else:
+        for step_order, rule_id, substitution, used_fact_ids in step_rows:
+            sub = _coerce_json(substitution) or {}
+            used = list(used_fact_ids) if used_fact_ids else []
+            step_key = (str(rule_id or ""), _sub_key(substitution))
+            candidates = step_atom_index.get(step_key, [])
+            atom = "-"
+            atom_status = "-"
+            if candidates:
+                atom, atom_status = candidates.pop(0)
+            console.print(
+                f"{step_order}. atom={atom} status={atom_status} rule={rule_id or '-'} "
+                f"sub={sub if sub else '-'} "
+                f"used_facts={used if used else '-'}"
+            )
+
+    if args.dag:
+        console.print()
+        console.print("[bold cyan]Proof DAG[/bold cyan]")
+        if dag_obj is None:
+            console.print("[dim]-[/dim]")
+        else:
+            console.print(json.dumps(dag_obj, indent=2, ensure_ascii=False))
+
+
+# ---------------------------------------------------------------------------
+# proof-graph
+# ---------------------------------------------------------------------------
+
+def cmd_proof_graph(args: argparse.Namespace) -> None:
+    proof_id = args.proof_id
+
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                pr.proof_id,
+                c.case_id,
+                pr.query,
+                pr.result,
+                pr.proof_dag
+            FROM proof_runs pr
+            JOIN cases c ON c.id = pr.case_id
+            WHERE pr.proof_id = %s
+            """,
+            (proof_id,),
+        )
+        row = cur.fetchone()
+
+    if row is None:
+        console.print(f"[bold red]proof not found[/bold red]: {proof_id}")
+        return
+
+    run_proof_id, case_id, query, result, proof_dag = row
+    dag_obj = _coerce_json(proof_dag)
+    if not isinstance(dag_obj, dict):
+        console.print("[bold red]invalid proof_dag JSON[/bold red]")
+        return
+
+    out_base = Path(args.output) if args.output else Path(f"proof_{run_proof_id}")
+    dot_path = out_base.with_suffix(".dot")
+    dot_path.parent.mkdir(parents=True, exist_ok=True)
+
+    dot_text = _build_proof_dot(
+        proof_id=str(run_proof_id),
+        case_id=str(case_id),
+        query=str(query),
+        result=str(result),
+        dag_map=dag_obj,
+    )
+    dot_path.write_text(dot_text, encoding="utf-8")
+    console.print(f"[bold green]DOT saved[/bold green]: {dot_path}")
+
+    if args.format == "dot":
+        return
+
+    dot_bin = _resolve_graphviz_engine(args.engine)
+    if dot_bin is None:
+        console.print(
+            f"[yellow]Graphviz binary '{args.engine}' not found.[/yellow] "
+            f"Install Graphviz or use --format dot."
+        )
+        return
+
+    out_path = out_base.with_suffix(f".{args.format}")
+    try:
+        subprocess.run(
+            [dot_bin, f"-T{args.format}", str(dot_path), "-o", str(out_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        err = (exc.stderr or exc.stdout or "").strip()
+        console.print(f"[bold red]Graphviz render failed[/bold red]: {err or exc}")
+        return
+
+    console.print(f"[bold green]Diagram saved[/bold green]: {out_path}")
+
+
+# ---------------------------------------------------------------------------
+# network-graph
+# ---------------------------------------------------------------------------
+
+def cmd_network_graph(args: argparse.Namespace) -> None:
+    from db import DBSession
+    from nn.graph_builder import GraphBuilder
+
+    case_id = args.case_id
+
+    with DBSession.connect() as session:
+        schemas = session.load_cluster_schemas()
+        entities, facts, rules, cluster_states = session.load_case(case_id)
+        data, node_index, _ = GraphBuilder(schemas).build(
+            entities=entities,
+            facts=facts,
+            rules=rules,
+            cluster_states=cluster_states,
+            memory_biases=None,
+        )
+
+    out_base = Path(args.output) if args.output else Path(f"network_{case_id}")
+    dot_path = out_base.with_suffix(".dot")
+    dot_path.parent.mkdir(parents=True, exist_ok=True)
+
+    dot_text = _build_case_network_dot(
+        case_id=case_id,
+        data=data,
+        node_index=node_index,
+        schemas=schemas,
+        facts=facts,
+        include_entities=not args.no_entities,
+    )
+    dot_path.write_text(dot_text, encoding="utf-8")
+    console.print(f"[bold green]DOT saved[/bold green]: {dot_path}")
+
+    if args.format == "dot":
+        return
+
+    dot_bin = _resolve_graphviz_engine(args.engine)
+    if dot_bin is None:
+        console.print(
+            f"[yellow]Graphviz binary '{args.engine}' not found.[/yellow] "
+            f"Install Graphviz or use --format dot."
+        )
+        return
+
+    out_path = out_base.with_suffix(f".{args.format}")
+    try:
+        subprocess.run(
+            [dot_bin, f"-T{args.format}", str(dot_path), "-o", str(out_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        err = (exc.stderr or exc.stdout or "").strip()
+        console.print(f"[bold red]Graphviz render failed[/bold red]: {err or exc}")
+        return
+
+    console.print(f"[bold green]Diagram saved[/bold green]: {out_path}")
+
+
+# ---------------------------------------------------------------------------
+# reset-state
+# ---------------------------------------------------------------------------
+
+def _collect_reset_counts(conn, prune_cluster_states: bool) -> dict[str, int]:
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM rules WHERE learned = TRUE")
+        learned_rules = int(cur.fetchone()[0])
+
+        cur.execute("SELECT COUNT(*) FROM proof_runs")
+        proof_runs = int(cur.fetchone()[0])
+
+        cur.execute("SELECT COUNT(*) FROM proof_steps")
+        proof_steps = int(cur.fetchone()[0])
+
+        cur.execute("SELECT COUNT(*) FROM facts WHERE status <> 'observed'")
+        non_observed_facts = int(cur.fetchone()[0])
+
+        cur.execute("SELECT COUNT(*) FROM fact_neural_trace")
+        neural_traces = int(cur.fetchone()[0])
+
+        cur.execute("SELECT COUNT(*) FROM facts WHERE proof_id IS NOT NULL")
+        facts_with_proof = int(cur.fetchone()[0])
+
+        cur.execute(
+            """
+            SELECT COUNT(*)
+            FROM facts
+            WHERE status = 'observed'
+              AND (
+                    truth_value IS DISTINCT FROM 'T'::truth_value
+                 OR truth_confidence IS DISTINCT FROM 1.0
+                 OR truth_logits IS NOT NULL
+              )
+            """
+        )
+        observed_needing_truth_reset = int(cur.fetchone()[0])
+
+        prunable_cluster_states = 0
+        if prune_cluster_states:
+            cur.execute("SELECT COUNT(*) FROM cluster_states WHERE is_clamped = FALSE")
+            prunable_cluster_states = int(cur.fetchone()[0])
+
+    return {
+        "learned_rules": learned_rules,
+        "proof_runs": proof_runs,
+        "proof_steps": proof_steps,
+        "non_observed_facts": non_observed_facts,
+        "neural_traces": neural_traces,
+        "facts_with_proof": facts_with_proof,
+        "observed_needing_truth_reset": observed_needing_truth_reset,
+        "prunable_cluster_states": prunable_cluster_states,
+    }
+
+
+def _apply_reset(conn, prune_cluster_states: bool) -> dict[str, int]:
+    result: dict[str, int] = {}
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM rules WHERE learned = TRUE")
+        result["deleted_learned_rules"] = cur.rowcount
+
+        cur.execute("DELETE FROM proof_runs")
+        result["deleted_proof_runs"] = cur.rowcount
+
+        # Czyścimy jawnie, choć zwykle po usunięciu facts i tak byłoby puste.
+        cur.execute("DELETE FROM fact_neural_trace")
+        result["deleted_neural_traces"] = cur.rowcount
+
+        cur.execute("DELETE FROM facts WHERE status <> 'observed'")
+        result["deleted_non_observed_facts"] = cur.rowcount
+
+        cur.execute(
+            """
+            UPDATE facts
+            SET
+                proof_id = NULL,
+                truth_value = 'T'::truth_value,
+                truth_confidence = 1.0,
+                truth_logits = NULL
+            WHERE status = 'observed'
+              AND (
+                    proof_id IS NOT NULL
+                 OR truth_value IS DISTINCT FROM 'T'::truth_value
+                 OR truth_confidence IS DISTINCT FROM 1.0
+                 OR truth_logits IS NOT NULL
+              )
+            """
+        )
+        result["reset_observed_facts"] = cur.rowcount
+
+        if prune_cluster_states:
+            cur.execute("DELETE FROM cluster_states WHERE is_clamped = FALSE")
+            result["deleted_non_clamped_cluster_states"] = cur.rowcount
+        else:
+            result["deleted_non_clamped_cluster_states"] = 0
+
+        cur.execute(
+            """
+            DELETE FROM rule_modules rm
+            WHERE rm.name = 'learned_nn'
+              AND NOT EXISTS (
+                    SELECT 1 FROM rules r WHERE r.module_id = rm.id
+              )
+            """
+        )
+        result["deleted_empty_learned_modules"] = cur.rowcount
+
+    return result
+
+
+def cmd_reset_state(args: argparse.Namespace) -> None:
+    prune_cluster_states = not args.keep_cluster_states
+
+    with connect() as conn:
+        counts = _collect_reset_counts(conn, prune_cluster_states=prune_cluster_states)
+
+        console.print("[bold cyan]Reset Preview[/bold cyan]")
+        console.print(f"learned_rules: {counts['learned_rules']}")
+        console.print(f"proof_runs: {counts['proof_runs']}")
+        console.print(f"proof_steps: {counts['proof_steps']}")
+        console.print(f"facts_non_observed: {counts['non_observed_facts']}")
+        console.print(f"fact_neural_trace: {counts['neural_traces']}")
+        console.print(f"facts_with_proof_link: {counts['facts_with_proof']}")
+        console.print(f"observed_facts_truth_reset: {counts['observed_needing_truth_reset']}")
+        if prune_cluster_states:
+            console.print(f"cluster_states_non_clamped: {counts['prunable_cluster_states']}")
+        else:
+            console.print("cluster_states_non_clamped: [dim]kept[/dim]")
+
+        if not args.yes:
+            console.print()
+            console.print("[yellow]Dry-run only.[/yellow] Run again with [bold]--yes[/bold] to apply.")
+            return
+
+        try:
+            applied = _apply_reset(conn, prune_cluster_states=prune_cluster_states)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+    console.print()
+    console.print("[bold green]Reset Applied[/bold green]")
+    console.print(f"deleted learned rules: {applied['deleted_learned_rules']}")
+    console.print(f"deleted proof runs: {applied['deleted_proof_runs']}")
+    console.print(f"deleted neural traces: {applied['deleted_neural_traces']}")
+    console.print(f"deleted non-observed facts: {applied['deleted_non_observed_facts']}")
+    console.print(f"reset observed facts (proof/truth): {applied['reset_observed_facts']}")
+    console.print(f"deleted non-clamped cluster_states: {applied['deleted_non_clamped_cluster_states']}")
+    console.print(f"deleted empty learned modules: {applied['deleted_empty_learned_modules']}")
+
+
+# ---------------------------------------------------------------------------
 # run-case
 # ---------------------------------------------------------------------------
 
@@ -461,6 +1199,214 @@ def cmd_run_case(args: argparse.Namespace) -> None:
     console.print(result.summary())
 
 
+def _load_case_ids(selected: list[str] | None) -> list[str]:
+    if selected:
+        return selected
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT case_id
+            FROM cases
+            ORDER BY id
+            """
+        )
+        return [str(r[0]) for r in cur.fetchall()]
+
+
+def _add_template_cluster_edges(data, node_index, schemas) -> set[tuple[str, str]]:
+    import torch
+
+    active_pairs: set[tuple[str, str]] = set()
+    for src in schemas:
+        src_type = f"c_{src.name}"
+        src_map = node_index.cluster_node_to_idx.get(src.name, {})
+        if not src_map:
+            continue
+
+        for dst in schemas:
+            if src.name == dst.name:
+                continue
+            if src.entity_type != dst.entity_type:
+                continue
+
+            dst_map = node_index.cluster_node_to_idx.get(dst.name, {})
+            if not dst_map:
+                continue
+
+            pairs = sorted(
+                (src_idx, dst_map[eid])
+                for eid, src_idx in src_map.items()
+                if eid in dst_map
+            )
+            if not pairs:
+                continue
+
+            uniq_pairs = sorted(set(pairs))
+            src_idx = [p[0] for p in uniq_pairs]
+            dst_idx = [p[1] for p in uniq_pairs]
+            data[src_type, "implies", f"c_{dst.name}"].edge_index = torch.tensor(
+                [src_idx, dst_idx],
+                dtype=torch.long,
+            )
+            active_pairs.add((src.name, dst.name))
+
+    return active_pairs
+
+
+def cmd_learn_rules(args: argparse.Namespace) -> None:
+    from db import DBSession
+    from nn import (
+        EntityMemoryBiasEncoder,
+        ExceptionGateBank,
+        GraphBuilder,
+        HeteroMessagePassingBank,
+        NeuralProposer,
+        ProposerTrainer,
+        RuleExtractionConfig,
+        extract_rules_from_mp_bank,
+    )
+    from nn.clamp import apply_clamp
+    from nn.config import NNConfig
+    from nn.graph_builder import EdgeTypeSpec
+
+    case_ids = _load_case_ids(args.case)
+    if not case_ids:
+        console.print("[bold red]No cases found.[/bold red]")
+        return
+
+    config = replace(NNConfig(), max_epochs=args.epochs)
+
+    with DBSession.connect() as session:
+        schemas = session.load_cluster_schemas()
+
+        role_specs = [
+            EdgeTypeSpec(
+                src_type=f"c_{s.name}",
+                relation="role_of",
+                dst_type="fact",
+                src_dim=s.dim,
+                dst_dim=GraphBuilder.FACT_DIM,
+            )
+            for s in schemas
+        ]
+
+        implies_specs = [
+            EdgeTypeSpec(
+                src_type=f"c_{src.name}",
+                relation="implies",
+                dst_type=f"c_{dst.name}",
+                src_dim=src.dim,
+                dst_dim=dst.dim,
+            )
+            for src in schemas
+            for dst in schemas
+            if src.name != dst.name and src.entity_type == dst.entity_type
+        ]
+
+        mp_bank = HeteroMessagePassingBank(role_specs + implies_specs)
+        gate_bank = ExceptionGateBank(gate_specs=[])
+        cluster_type_dims = {s.name: s.dim for s in schemas}
+        proposer = NeuralProposer(config, mp_bank, gate_bank, cluster_type_dims)
+
+        graph_builder = GraphBuilder(schemas)
+        memory_encoder = EntityMemoryBiasEncoder(schemas, config)
+        trainer = ProposerTrainer(
+            proposer=proposer,
+            cluster_schemas=schemas,
+            config=config,
+            seed=args.seed,
+        )
+
+        train_cases: list[tuple[object, object]] = []
+        active_cluster_pairs: set[tuple[str, str]] = set()
+        loaded_case_ids: list[str] = []
+
+        for case_id in case_ids:
+            try:
+                entities, facts, _rules, states = session.load_case(case_id)
+            except ValueError:
+                console.print(f"[yellow]Skipping missing case[/yellow]: {case_id}")
+                continue
+
+            data, node_index, _ = graph_builder.build(
+                entities=entities,
+                facts=facts,
+                rules=[],
+                cluster_states=states,
+                memory_biases=None,
+            )
+
+            active_cluster_pairs |= _add_template_cluster_edges(data, node_index, schemas)
+
+            memory_biases = memory_encoder.compute_memory_bias(entities, node_index)
+            for schema in schemas:
+                node_type = f"c_{schema.name}"
+                if schema.name in memory_biases:
+                    data[node_type].memory_bias = memory_biases[schema.name]
+
+            for node_type in data.node_types:
+                x = data[node_type].x
+                is_clamped = data[node_type].get("is_clamped")
+                clamp_hard = data[node_type].get("clamp_hard")
+                logits_out, _ = apply_clamp(x, is_clamped, clamp_hard, config)
+                data[node_type].x = logits_out
+
+            train_cases.append((data, node_index))
+            loaded_case_ids.append(case_id)
+
+        if not train_cases:
+            console.print("[bold red]No training cases available.[/bold red]")
+            return
+
+        step_count = 0
+        for metrics in trainer.train_epochs(train_cases):
+            step_count += 1
+            if step_count % len(train_cases) == 0:
+                epoch = int(metrics.get("epoch", 0))
+                total = float(metrics.get("L_total", 0.0))
+                console.print(
+                    f"[dim]epoch {epoch + 1}/{args.epochs}[/dim] "
+                    f"L_total={total:.4f}"
+                )
+
+        extracted = extract_rules_from_mp_bank(
+            mp_bank=proposer.mp_bank,
+            cluster_schemas=schemas,
+            config=RuleExtractionConfig(
+                min_weight=args.min_weight,
+                top_k_per_source_value=args.top_k,
+                rule_id_prefix=args.rule_prefix,
+            ),
+        )
+
+        filtered = [
+            r for r in extracted
+            if r.body and (r.body[0].predicate, r.head.predicate) in active_cluster_pairs
+        ]
+
+        if args.dry_run:
+            console.print(
+                f"[bold yellow]learn-rules dry-run[/bold yellow]: "
+                f"cases={len(loaded_case_ids)}, extracted={len(filtered)}"
+            )
+            if filtered:
+                table = Table(title="Extracted Learned Rules (preview)", header_style="bold cyan")
+                table.add_column("rule_id", style="bold yellow")
+                table.add_column("weight", justify="right", style="dim")
+                for rule in filtered[:20]:
+                    w = rule.metadata.weight if rule.metadata.weight is not None else 0.0
+                    table.add_row(rule.rule_id, f"{w:.4f}")
+                console.print(table)
+            return
+
+        session.save_learned_rules(filtered, module_name=args.module)
+
+    console.print(
+        f"[bold green]learn-rules completed[/bold green]: "
+        f"cases={len(loaded_case_ids)}, saved={len(filtered)}, module={args.module}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
@@ -475,7 +1421,12 @@ _COMMANDS = {
     "entities":      (cmd_entities,      "List entity instances"),
     "facts":         (cmd_facts,         "List facts"),
     "rules":         (cmd_rules,         "List rules"),
+    "proof":         (cmd_proof,         "Show one proof run by proof_id"),
+    "proof-graph":   (cmd_proof_graph,   "Export one proof run as Graphviz diagram"),
+    "network-graph": (cmd_network_graph, "Export full case network graph (entities/facts/clusters/edges)"),
+    "reset-state":   (cmd_reset_state,   "Reset runtime artifacts (learned rules, inferred facts, proofs, traces)"),
     "run-case":      (cmd_run_case,      "Run full pipeline for one case_id and save results"),
+    "learn-rules":   (cmd_learn_rules,   "Train NN proposer and persist extracted learned rules"),
 }
 
 
@@ -490,6 +1441,108 @@ def main() -> None:
         cmd_parser = sub.add_parser(name, help=help_text)
         if name == "run-case":
             cmd_parser.add_argument("case_id", help="Case ID, e.g. TC-001")
+        elif name == "proof":
+            cmd_parser.add_argument("proof_id", help="Proof run ID (facts.proof_id / proof_runs.proof_id)")
+            cmd_parser.add_argument(
+                "--dag",
+                action="store_true",
+                help="Print full proof_dag JSON.",
+            )
+        elif name == "proof-graph":
+            cmd_parser.add_argument("proof_id", help="Proof run ID (facts.proof_id / proof_runs.proof_id)")
+            cmd_parser.add_argument(
+                "--output",
+                help="Output file base path (without extension). Default: proof_<proof_id> in current dir.",
+            )
+            cmd_parser.add_argument(
+                "--format",
+                choices=("dot", "svg", "png", "pdf"),
+                default="svg",
+                help="Output format (default: svg).",
+            )
+            cmd_parser.add_argument(
+                "--engine",
+                default="dot",
+                help="Graphviz engine binary name (default: dot).",
+            )
+        elif name == "network-graph":
+            cmd_parser.add_argument("case_id", help="Case ID, e.g. TC-001")
+            cmd_parser.add_argument(
+                "--output",
+                help="Output file base path (without extension). Default: network_<case_id> in current dir.",
+            )
+            cmd_parser.add_argument(
+                "--format",
+                choices=("dot", "svg", "png", "pdf"),
+                default="svg",
+                help="Output format (default: svg).",
+            )
+            cmd_parser.add_argument(
+                "--engine",
+                default="dot",
+                help="Graphviz engine binary name (default: dot).",
+            )
+            cmd_parser.add_argument(
+                "--no-entities",
+                action="store_true",
+                help="Hide ENTITY nodes and only render fact/cluster network.",
+            )
+        elif name == "reset-state":
+            cmd_parser.add_argument(
+                "--yes",
+                action="store_true",
+                help="Apply reset (without this flag command runs in preview mode).",
+            )
+            cmd_parser.add_argument(
+                "--keep-cluster-states",
+                action="store_true",
+                help="Do not delete non-clamped cluster_states rows.",
+            )
+        elif name == "learn-rules":
+            cmd_parser.add_argument(
+                "--case",
+                action="append",
+                help="Case ID to use for training (repeatable). Default: all cases.",
+            )
+            cmd_parser.add_argument(
+                "--epochs",
+                type=int,
+                default=20,
+                help="Training epochs (default: 20).",
+            )
+            cmd_parser.add_argument(
+                "--min-weight",
+                type=float,
+                default=0.5,
+                help="Min extracted rule weight (default: 0.5).",
+            )
+            cmd_parser.add_argument(
+                "--top-k",
+                type=int,
+                default=2,
+                help="Top-k targets per source value during extraction (default: 2).",
+            )
+            cmd_parser.add_argument(
+                "--module",
+                default="learned_nn",
+                help="Target rule_modules.name for saved learned rules (default: learned_nn).",
+            )
+            cmd_parser.add_argument(
+                "--rule-prefix",
+                default="learned.nn",
+                help="Prefix for generated rule_id (default: learned.nn).",
+            )
+            cmd_parser.add_argument(
+                "--seed",
+                type=int,
+                default=42,
+                help="Training RNG seed (default: 42).",
+            )
+            cmd_parser.add_argument(
+                "--dry-run",
+                action="store_true",
+                help="Train and extract, but do not save rules to DB.",
+            )
 
     args = parser.parse_args()
 

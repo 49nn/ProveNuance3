@@ -5,6 +5,28 @@ venv/
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.py[cod]
+*$py.class
+
+# Tool/test caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.pyre/
+.pytype/
+.tox/
+.nox/
+.cache/
+.coverage
+.coverage.*
+htmlcov/
+pip-wheel-metadata/
+
+# Notebook cache
+.ipynb_checkpoints/
 
 # IDE metadata
 .idea/
@@ -16,3 +38,5 @@ article.md
 
 # Local planning docs
 docs/backlog.md
+cli/__pycache__/*
+cli/__pycache__/pn3.cpython-313.pyc

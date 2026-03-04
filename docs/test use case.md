@@ -162,7 +162,7 @@ Poniżej tylko kluczowe reguły, które pokrywają przypadki testowe:
 
 ### 3.1. Zawarcie umowy
 
-* `contract_formed(o) :- order_accepted(store,o,da).`
+* `contract_formed(o) :- order_accepted(_,o,da).`
 
 ### 3.2. Anulowanie za brak płatności (48h)
 
