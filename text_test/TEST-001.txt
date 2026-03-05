@@ -1,0 +1,5 @@
+Marek Zielinski (konsument) zlozyl zamowienie O5001 dnia 10 stycznia 2026 na smartfon (produkt fizyczny P5001). Sklep MobileShop Sp. z o.o. przyjal zamowienie 10 stycznia 2026. Klient zaplacil karta (PAY5001) kwote 2 499,00 zl.
+
+Towar dostarczono (DEL5001) dnia 15 stycznia 2026. Klient zlozyl oswiadczenie o odstapeniu (STMT5001) dnia 25 stycznia 2026 – 10 dni po dostawie. Towar w oryginalnym opakowaniu, nieuzywany. Towar odeslano (RS5001).
+
+Klient oczekuje zwrotu 2 499,00 zl na karte.

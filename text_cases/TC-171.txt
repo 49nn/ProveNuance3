@@ -1,0 +1,5 @@
+Norbert Jabłoński (konsument) złożył zamówienie O171a dnia 9 marca 2026 na instrument muzyczny (produkt fizyczny P171) za 8 000,00 zł. Klient zapłacił przelewem (PAY171a).
+
+Towar dostarczono (DEL171a) dnia 14 marca 2026. Instrument miał pęknięte pudło rezonansowe (defective=YES). Klient złożył oświadczenie o odstąpieniu (STMT171a) dnia 16 marca 2026. Sklep MusicWorld Sp. z o.o. zgodził się pokryć koszty odesłania (store_pays_return=YES) i zwrócił pełną kwotę 8 000,00 zł.
+
+Sprawa zakończona polubownie.

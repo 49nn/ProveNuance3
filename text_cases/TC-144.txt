@@ -1,0 +1,5 @@
+Kamil Lewandowski (konsument) złożył zamówienie O144a dnia 5 marca 2026 na odzież za 800,00 zł (produkt fizyczny P144). Zastosował kupon RETURN20 (20% dla powracających klientów, coupon_stackable=YES). Klient ma historię 5 wcześniejszych zamówień.
+
+Sklep FashionCity Sp. z o.o. zweryfikował historię i zastosował rabat 160,00 zł. Klient zapłacił przelewem (PAY144a) 640,00 zł.
+
+Transakcja przebiegła prawidłowo.

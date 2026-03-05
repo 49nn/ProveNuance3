@@ -1,0 +1,5 @@
+Urszula Nowacka (konsument) złożyła zamówienie O206a dnia 18 maja 2026 na słuchawki (produkt fizyczny P206) za 450,00 zł. Klientka zapłaciła kartą (PAY206a). Zastosowała kupon AUDIO15 (15%, coupon_stackable=YES). Po rabacie 67,50 zł zapłaciła 382,50 zł.
+
+Towar dostarczono (DEL206a) dnia 23 maja 2026. Jedna słuchawka nie działa (defective=YES). Klientka złożyła oświadczenie o odstąpieniu (STMT206a) dnia 25 maja 2026.
+
+Sklep HeadphoneShop Sp. z o.o. przyjął zwrot i zwrócił 382,50 zł. Sprawa zakończona.

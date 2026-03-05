@@ -1,0 +1,5 @@
+Edward Krawczyk (konsument) złożył zamówienie O138a dnia 9 lutego 2026 na kurs motoryzacyjny online (produkt cyfrowy P138). Sklep MotoLearn Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klient zapłacił kartą (PAY138a) 249,00 zł.
+
+Klient nie pobrał żadnych materiałów (download_started_flag=NO). Po miesiącu odkrył, że kurs nie jest już dostępny – sklep zamknął platformę. Klient otworzył chargeback (chargeback_status=OPEN).
+
+Bank zwrócił środki klientowi (chargeback_status=RESOLVED_CUSTOMER) – sklep nie świadczył usługi.

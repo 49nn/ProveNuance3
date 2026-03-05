@@ -1,0 +1,5 @@
+Jacek Baran (konsument) złożył zamówienie O116a dnia 11 stycznia 2026 na gitarę akustyczną (produkt fizyczny P116). Sklep MusicShop Sp. z o.o. przyjął zamówienie. Klient zapłacił przelewem (PAY116a) 1 100,00 zł.
+
+Towar dostarczono (DEL116a) dnia 16 stycznia 2026. Klient złożył oświadczenie o odstąpieniu (STMT116a) dnia 17 stycznia 2026 – 1 dzień po dostawie. Gitara ma wyrwany kołek przy główce – towar wadliwy (defective=YES).
+
+Sklep zaproponował naprawę w serwisie. Klient chce wymiany na nową gitarę.

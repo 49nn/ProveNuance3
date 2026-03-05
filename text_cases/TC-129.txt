@@ -1,0 +1,5 @@
+Adam Ostrowski (konsument) złożył zamówienie O129a dnia 18 lutego 2026 na token dostępu do API (produkt cyfrowy P129). Sklep APIHub Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klient zapłacił kartą (PAY129a) 599,00 zł.
+
+Token został wygenerowany i pobrany (download_started_flag=YES). Klient udostępnił token zewnętrznemu wykonawcy (password_shared=YES). Token wykorzystano w zakresie przekraczającym wykupiony plan. Klient złożył oświadczenie o odstąpieniu (STMT129a) dnia 22 lutego 2026.
+
+Sklep odmówił zwrotu i wystawił fakturę za nadużycie planu.

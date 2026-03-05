@@ -1,0 +1,5 @@
+Marta Piechowiak (konsument) złożyła zamówienie O199a dnia 4 maja 2026 na zestaw gimnastyczny (produkt fizyczny P199) za 680,00 zł. Klientka zapłaciła kartą (PAY199a). Zastosowała kupon GYM10 (10%, coupon_stackable=YES). Po rabacie 68,00 zł zapłaciła 612,00 zł.
+
+Towar dostarczono (DEL199a) dnia 9 maja 2026. Klientka stwierdziła, że mata do jogi w zestawie jest wadliwa (defective=YES) – kleje się. Klientka złożyła oświadczenie o odstąpieniu (STMT199a) dnia 11 maja 2026.
+
+Sklep FitEquip Sp. z o.o. przyjął zwrot całego zestawu i zwrócił 612,00 zł.

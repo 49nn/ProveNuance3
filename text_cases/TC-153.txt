@@ -1,0 +1,5 @@
+Ursula Szymańska złożyła zamówienie O153a dnia 3 marca 2026 na perfumy (produkt fizyczny P153). Jej konto A153 jest aktywne (account_status=ACTIVE). Klientka zapłaciła kartą (PAY153a) 320,00 zł.
+
+W trakcie realizacji zamówienia klientka zmieniła hasło po wykryciu podejrzanego logowania. Jej poprzednie hasło mogło być udostępnione (password_shared=YES – podejrzenie).
+
+Sklep Beauty&Scent Sp. z o.o. dostarczył towar bez zastrzeżeń (DEL153a) dnia 8 marca 2026.

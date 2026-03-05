@@ -1,0 +1,5 @@
+Genowefa Lis (konsument) złożyła zamówienie O164a dnia 18 marca 2026 na artykuły papiernicze (produkt fizyczny P164) za 95,00 zł. Klientka zapłaciła BLIKiem (PAY164a). Transakcja zakończyła się błędem timeout – klientka nie wiedziała czy płatność przeszła.
+
+Klientka zapłaciła ponownie (PAY164b) – podwójna płatność 190,00 zł. Obie transakcje zostały zaksięgowane przez sklep PaperWorld Sp. z o.o.
+
+Sklep niezwłocznie zwrócił nadpłatę 95,00 zł. Towar dostarczono (DEL164a) dnia 21 marca 2026.

@@ -1,0 +1,5 @@
+Robert Kowalczyk zlozyl zamowienie O5006 dnia 20 stycznia 2026 na laptop (produkt fizyczny P5006) za 5 500,00 zl. Jego konto A5006 zostalo zablokowane (account_status=BLOCKED) z powodu nieuregulowanej naleznosci.
+
+Sklep LaptopPro Sp. z o.o. zablokował przetwarzanie zamowienia automatycznie. Klient nie dokonal platnosci. Towar nie zostal wyslany.
+
+Klient kwestionuje blokade konta.

@@ -1,0 +1,5 @@
+Bartłomiej Kowal złożył zamówienie O159a dnia 10 marca 2026 na sprzęt RTV (produkt fizyczny P159) za 6 800,00 zł. Jego konto A159 jest aktywne (account_status=ACTIVE), ale ma otwarte postępowanie chargeback z innej transakcji (chargeback_status=OPEN dla zamówienia O158x).
+
+Sklep ElektroNow Sp. z o.o. przyjął nowe zamówienie mimo otwartego chargebacku. Klient zapłacił przelewem (PAY159a).
+
+Towar dostarczono (DEL159a) dnia 15 marca 2026 bez komplikacji.

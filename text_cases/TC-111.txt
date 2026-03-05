@@ -1,0 +1,5 @@
+Dariusz Krawczyk (konsument) złożył zamówienie O111a dnia 1 stycznia 2026 na siłownię domową (produkt fizyczny P111). Sklep FitGear Sp. z o.o. przyjął zamówienie 1 stycznia 2026. Klient zapłacił kartą (PAY111a) 3 800,00 zł.
+
+Towar dostarczono (DEL111a) dnia 6 stycznia 2026. Klient złożył oświadczenie o odstąpieniu (STMT111a) dnia 13 stycznia 2026 – 7 dni po dostawie. Towar był spakowany i nieużywany. Klient odesłał przesyłką (RS111a) dnia 14 stycznia 2026.
+
+Sklep przyjął zwrot. Klient oczekuje zwrotu 3 800,00 zł.

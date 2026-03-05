@@ -1,0 +1,5 @@
+Bożena Kowalska (konsument) złożyła zamówienie O130a dnia 20 lutego 2026 na fontpack graficzny (produkt cyfrowy P130). Sklep DesignFonts Sp. z o.o. przyjął zamówienie bez pobrania zgody (digital_consent=NO). Klientka zapłaciła BLIKiem (PAY130a) 59,00 zł.
+
+Klientka pobrała pakiet (download_started_flag=YES) i odkryła, że fonty mają ograniczenia licencyjne niedostosowane do użytku komercyjnego, mimo że reklama sugerowała inaczej. Klientka złożyła oświadczenie o odstąpieniu (STMT130a) dnia 24 lutego 2026.
+
+Ponieważ sklep nie uzyskał zgody, klientka ma prawo do zwrotu mimo pobrania.

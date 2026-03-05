@@ -1,0 +1,5 @@
+Kamila Mazur (konsument) złożyła zamówienie O197a dnia 30 kwietnia 2026 na kosmetyki organiczne (produkt fizyczny P197) za 320,00 zł. Klientka zapłaciła kartą (PAY197a).
+
+Towar dostarczono (DEL197a) dnia 5 maja 2026. Klientka miała reakcję alergiczną na jeden z kremów (defective=YES – niezgodny skład z deklaracją). Klientka złożyła oświadczenie o odstąpieniu (STMT197a) dnia 6 maja 2026.
+
+Sklep OrganicCare Sp. z o.o. przyjął zwrot i odesłał do producenta. Klientka oczekuje zwrotu 320,00 zł.

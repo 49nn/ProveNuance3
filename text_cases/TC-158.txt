@@ -1,0 +1,5 @@
+Aleksandra Nowacka złożyła zamówienie O158a dnia 9 marca 2026 na kosmetyki (produkt fizyczny P158). Jej konto A158 zostało założone tego samego dnia (account_status=ACTIVE). Klientka zapłaciła kartą (PAY158a) 230,00 zł.
+
+System sklepu Beauty24 Sp. z o.o. zablokował zamówienie automatycznie (account_status=BLOCKED) jako podejrzane – nowe konto i zamówienie tego samego dnia powyżej progu 200,00 zł.
+
+Klientka przeszła weryfikację tożsamości i konto odblokowano (account_status=ACTIVE). Zamówienie zrealizowano z opóźnieniem 1 dnia.

@@ -1,0 +1,5 @@
+Celina Marek (konsument) złożyła zamówienie O112a dnia 3 stycznia 2026 na zestaw do sushi (produkt fizyczny P112). Sklep AsianKitchen Sp. z o.o. przyjął zamówienie 3 stycznia 2026. Klientka zapłaciła BLIKiem (PAY112a) 190,00 zł.
+
+Towar dostarczono (DEL112a) dnia 8 stycznia 2026. Klientka otworzyła opakowanie i sprawdziła zawartość, ale zestawu nie użyła. Złożyła oświadczenie o odstąpieniu (STMT112a) dnia 20 stycznia 2026 – 12 dni po dostawie. Towar odesłano (RS112a).
+
+Sklep przyjął zwrot – produkt jednorazowego użytku nie został użyty, opakowanie otwarte ale integralne.

@@ -1697,6 +1697,7 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
             try:
                 with session.conn.transaction():
                     _ensure_case_exists(session.conn, case_id, source_id, case_id)
+                session.conn.commit()
                 tasks.append((case_id, source_id, text))
             except Exception as exc:
                 console.print(f"  [bold red]ERR[/bold red] {case_id} (setup): {exc}")

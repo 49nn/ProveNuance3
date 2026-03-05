@@ -1,0 +1,5 @@
+Czesław Nowak (konsument) złożył zamówienie O136a dnia 5 lutego 2026 na zegarek premium (produkt fizyczny P136). Sklep LuxWatch Sp. z o.o. przyjął zamówienie. Klient zapłacił kartą (PAY136a) 12 000,00 zł.
+
+Towar dostarczono (DEL136a) dnia 10 lutego 2026. Klient złożył oświadczenie o odstąpieniu (STMT136a) dnia 20 lutego 2026 – po 10 dniach. Sklep odmówił twierdząc że zegarek był używany. Klient otworzył chargeback (chargeback_status=OPEN).
+
+Sprawa w toku – bank prosi o dokumentację obu stron.

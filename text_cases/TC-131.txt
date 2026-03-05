@@ -1,0 +1,5 @@
+Firma Alpha Sp. z o.o. (klient biznesowy) złożyła zamówienie O131a dnia 2 marca 2026 na 30 monitorów przemysłowych (produkt fizyczny P131). Sklep IndustrialDisplay Sp. z o.o. przyjął zamówienie. Klient zapłacił przelewem (PAY131a) 90 000,00 zł.
+
+Towar dostarczono (DEL131a) dnia 10 marca 2026. 5 monitorów ma uszkodzone matryce (defective=YES). Klient żąda wymiany 5 sztuk. Sklep oferuje naprawę serwisową.
+
+Klient nalega na wymianę w terminie 7 dni pod rygorem kary umownej.

@@ -1,0 +1,5 @@
+Mirosław Mazur (konsument) złożył zamówienie O182a dnia 31 marca 2026 na drona (produkt fizyczny P182) za 3 200,00 zł. Klient zapłacił kartą (PAY182a).
+
+Towar dostarczono (DEL182a) dnia 5 kwietnia 2026. Klient złożył oświadczenie o odstąpieniu (STMT182a) dnia 7 kwietnia 2026 – 2 dni po dostawie. Dron był testowo uruchomiony. Sklep DroneShop Sp. z o.o. odmówił pełnego zwrotu wskazując, że towar zawiera zarejestrowany numer seryjny na nazwisko klienta i był użyty do lotu.
+
+Spór: klient twierdzi, że uruchomienie to „sprawdzenie", nie „użycie".

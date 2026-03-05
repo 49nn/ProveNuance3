@@ -1,0 +1,3 @@
+Grzegorz Piotrowska (konsument) złożył zamówienie O140a dnia 13 lutego 2026 na akcesoria samochodowe (produkt fizyczny P140). Sklep AutoParts Sp. z o.o. przyjął zamówienie. Klient zapłacił kartą (PAY140a) 890,00 zł.
+
+Towar dostarczono (DEL140a) dnia 18 lutego 2026. Towar wadliwy (defective=YES) – niekompatybilny z modelem auta klienta mimo zapewnień sklepu. Klient złożył oświadczenie o odstąpieniu (STMT140a) dnia 20 lutego 2026. Sklep milczał przez 30 dni. Klient otworzył chargeback (chargeback_status=OPEN). Bank przyznał rację klientowi (chargeback_status=RESOLVED_CUSTOMER).

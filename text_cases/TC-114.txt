@@ -1,0 +1,5 @@
+Grażyna Nowicka (konsument) złożyła zamówienie O114a dnia 7 stycznia 2026 na pościel jedwabną (produkt fizyczny P114). Sklep LuxBed Sp. z o.o. przyjął zamówienie. Klientka zapłaciła kartą (PAY114a) 750,00 zł.
+
+Towar dostarczono (DEL114a) dnia 12 stycznia 2026. Klientka złożyła oświadczenie o odstąpieniu (STMT114a) dnia 21 stycznia 2026 – po 9 dniach. Pościel była sprana – klientka twierdzi, że trzeba było sprawdzić w praniu.
+
+Sklep odmówił zwrotu – używanie produktu przed zwrotem przekracza to, co niezbędne do sprawdzenia towaru.

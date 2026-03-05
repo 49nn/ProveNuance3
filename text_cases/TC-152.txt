@@ -1,0 +1,5 @@
+Tomasz Baran złożył zamówienie O152a dnia 2 marca 2026 na elektronikę (produkt fizyczny P152). Jego konto A152 jest zablokowane (account_status=BLOCKED) z powodu chargebacku sprzed 3 miesięcy.
+
+Sklep GadgetWorld Sp. z o.o. automatycznie odrzucił zamówienie. Klient nie może składać nowych zamówień do czasu rozwiązania sprawy chargebackowej (chargeback_status=OPEN).
+
+Klient twierdzi, że chargeback był błędem banku i nie jego winą.

@@ -1,0 +1,5 @@
+Norbert Wiśniewski (konsument) złożył zamówienie O200a dnia 6 maja 2026 na smartfon z akcesoriami (produkt fizyczny P200) za 4 200,00 zł. Klient zapłacił kartą (PAY200a). Jego konto A200 jest aktywne (account_status=ACTIVE).
+
+Towar dostarczono (DEL200a) dnia 11 maja 2026. Smartfon sprawny. Klient złożył oświadczenie o odstąpieniu (STMT200a) dnia 21 maja 2026 – 10 dni po dostawie, bez podania powodu. Towar w oryginalnym opakowaniu z folią ekranu.
+
+Sklep MobileWorld Sp. z o.o. przyjął zwrot bez zastrzeżeń. Klient oczekuje zwrotu 4 200,00 zł na kartę.

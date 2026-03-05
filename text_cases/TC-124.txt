@@ -1,0 +1,5 @@
+Stefan Janicki (konsument) złożył zamówienie O124a dnia 8 lutego 2026 na plugin do DAW (produkt cyfrowy P124). Sklep StudioPlugins Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klient zapłacił kartą (PAY124a) 89,00 zł.
+
+Klient zainstalował plugin (download_started_flag=YES) i odkrył, że jest niezgodny z jego wersją oprogramowania – sklep nie podał wymagań systemowych. Klient złożył oświadczenie o odstąpieniu (STMT124a) dnia 10 lutego 2026.
+
+Sklep odmówił zwrotu (pobrano po zgodzie). Klient twierdzi, że brak informacji o wymaganiach systemowych stanowi wadę towaru.

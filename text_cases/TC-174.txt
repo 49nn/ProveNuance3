@@ -1,0 +1,5 @@
+Renata Dąbrowska (konsument) złożyła zamówienie O174a dnia 15 marca 2026 na ekspres do kawy (produkt fizyczny P174) za 1 400,00 zł. Klientka zapłaciła kartą (PAY174a).
+
+Towar dostarczono (DEL174a) dnia 20 marca 2026. Ekspres przestał działać po 5 dniach (defective=YES). Klientka złożyła oświadczenie o odstąpieniu (STMT174a) dnia 25 marca 2026. Sklep CafeWorld Sp. z o.o. zaproponował naprawę w ciągu 30 dni.
+
+Klientka odmówiła i żąda zwrotu pieniędzy lub wymiany na nowy produkt.

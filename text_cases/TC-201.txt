@@ -1,0 +1,5 @@
+Olimpia Kowalczyk (konsument) złożyła zamówienie O201a dnia 8 maja 2026 na bilet wstępu na wydarzenie online (produkt cyfrowy P201). Sklep EventStream Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klientka zapłaciła kartą (PAY201a) 150,00 zł.
+
+Klientka obejrzała 20% transmisji (download_started_flag=YES), potem połączenie się zerwało. Klientka złożyła oświadczenie o odstąpieniu (STMT201a) dnia 9 maja 2026, twierdząc że usługa była przerywana.
+
+Sklep odmówił zwrotu wskazując na zgodę i częściowe korzystanie. Klientka twierdzi, że usługa nie była wykonana należycie (defective=YES).

@@ -1,0 +1,5 @@
+Jakub Orzechowski (konsument) złożył zamówienie O196a dnia 28 kwietnia 2026 na roczną subskrypcję antywirusową (produkt cyfrowy P196) za 199,00 zł. Sklep SecurePlus Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klient zapłacił kartą (PAY196a).
+
+Klient zainstalował oprogramowanie na 2 komputerach (download_started_flag=YES). Odkrył, że licencja obejmuje tylko 1 urządzenie. Klient złożył oświadczenie o odstąpieniu (STMT196a) dnia 30 kwietnia 2026.
+
+Sklep zaproponował ulepszenie do licencji multi-device za dopłatą. Klient odrzucił i domaga się pełnego zwrotu.

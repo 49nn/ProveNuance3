@@ -1,0 +1,5 @@
+Witold Kowalczyk (konsument) złożył zamówienie O190a dnia 16 kwietnia 2026 na robot kuchenny (produkt fizyczny P190) za 1 800,00 zł. Klient zapłacił BLIKiem (PAY190a). Zastosował kupon KITCHEN15 (15%, coupon_stackable=YES). Po rabacie 270,00 zł zapłacił 1 530,00 zł.
+
+Towar dostarczono (DEL190a) dnia 21 kwietnia 2026. Robot wadliwy (defective=YES) – nie miksuje. Klient złożył oświadczenie o odstąpieniu (STMT190a) dnia 23 kwietnia 2026. Sklep KitchenMaster Sp. z o.o. przyjął zwrot.
+
+Klient oczekuje zwrotu 1 530,00 zł (kwota zapłacona po rabacie).

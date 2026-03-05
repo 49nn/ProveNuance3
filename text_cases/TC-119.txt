@@ -1,0 +1,5 @@
+Małgorzata Duda (konsument) złożyła zamówienie O119a dnia 17 stycznia 2026 na rower dziecięcy (produkt fizyczny P119). Sklep Kids&Bikes Sp. z o.o. przyjął zamówienie. Klientka zapłaciła BLIKiem (PAY119a) 680,00 zł.
+
+Towar dostarczono (DEL119a) dnia 22 stycznia 2026. Rower został zmontowany i użyty przez dziecko przez 3 dni. Klientka złożyła oświadczenie o odstąpieniu (STMT119a) dnia 28 stycznia 2026.
+
+Sklep odmówił pełnego zwrotu, przyjął towar ale potrącił 20% wartości tytułem zużycia. Klientka kwestionuje potrącenie.

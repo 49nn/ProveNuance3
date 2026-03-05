@@ -1,0 +1,5 @@
+Ryszard Kowal (konsument) złożył zamówienie O203a dnia 12 maja 2026 na zestaw grillowy (produkt fizyczny P203) za 1 200,00 zł. Klient zapłacił kartą (PAY203a). Zastosował kupon GRILL20 (20%, coupon_stackable=YES, ważny do 31 maja 2026). Po rabacie zapłacił 960,00 zł.
+
+Towar dostarczono (DEL203a) dnia 17 maja 2026. Grill sprawny. Klient złożył oświadczenie o odstąpieniu (STMT203a) dnia 25 maja 2026 – zmienił zdanie. Towar nieużywany.
+
+Sklep GrillMaster Sp. z o.o. przyjął zwrot. Klient oczekuje zwrotu 960,00 zł.

@@ -1,0 +1,5 @@
+Ximena Piotrowska złożyła zamówienie O155a dnia 6 marca 2026 na laptop (produkt fizyczny P155). Jej konto A155 jest aktywne (account_status=ACTIVE). Klientka zapłaciła kartą (PAY155a) 4 200,00 zł.
+
+Po złożeniu zamówienia hakerzy uzyskali dostęp do konta klientki (password_shared=YES – nieautoryzowane). Hakerzy zmienili adres dostawy. Klientka natychmiast zgłosiła incydent sklepowi TechWorld Sp. z o.o.
+
+Sklep wstrzymał wysyłkę. Konto zablokowane (account_status=BLOCKED) tymczasowo. Nowe zamówienie zostanie zrealizowane na oryginalny adres po weryfikacji tożsamości.

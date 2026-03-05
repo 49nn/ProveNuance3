@@ -1,0 +1,5 @@
+Radosław Jankowski (konsument) złożył zamówienie O186a dnia 8 kwietnia 2026 na kabel HDMI 2.1 (produkt fizyczny P186) za 89,00 zł. Klient zapłacił kartą (PAY186a).
+
+Towar dostarczono (DEL186a) dnia 11 kwietnia 2026. Kabel nie obsługuje 4K@120Hz mimo opisu (defective=YES). Klient złożył oświadczenie o odstąpieniu (STMT186a) dnia 13 kwietnia 2026.
+
+Sklep TechCables Sp. z o.o. odmówił twierdząc, że opis był ogólnikowy. Klient otworzył chargeback (chargeback_status=OPEN).

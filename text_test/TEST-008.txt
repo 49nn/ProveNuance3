@@ -1,0 +1,5 @@
+Tomasz Baran (konsument) zlozyl zamowienie O5008 dnia 24 stycznia 2026 na aparat fotograficzny (produkt fizyczny P5008) za 3 200,00 zl. Klient zaplacil karta (PAY5008).
+
+Towar dostarczono (DEL5008) dnia 29 stycznia 2026. Aparat nie ogniskuje poprawnie – towar wadliwy (defective=YES). Klient zlozyl oswiadczenie o odstapeniu (STMT5008) dnia 31 stycznia 2026. Sklep PhotoWorld Sp. z o.o. odmowil zwrotu i zaproponowal serwis.
+
+Klient otworzyl chargeback (chargeback_status=OPEN). Bank rozstrzygnął na korzysc klienta (chargeback_status=RESOLVED_CUSTOMER).

@@ -1,0 +1,5 @@
+Marta Kowal (konsument) złożyła zamówienie O170a dnia 7 marca 2026 na laptop (produkt fizyczny P170) za 5 800,00 zł. Zastosowała kupon STUDENT20 (20%, coupon_stackable=YES, wymagany status studenta). Klientka jest studentką.
+
+Sklep EduTech Sp. z o.o. zweryfikował status studentki i zastosował rabat 1 160,00 zł. Klientka zapłaciła kartą (PAY170a) 4 640,00 zł.
+
+Towar dostarczono (DEL170a) dnia 12 marca 2026. Laptop sprawny – brak sporu. Referencyjny przypadek kuponu warunkowego.

@@ -1,0 +1,5 @@
+Jan Wróblewski (konsument) złożył zamówienie O167a dnia 1 marca 2026 na kurs online (produkt cyfrowy P167). Sklep EduPath Sp. z o.o. nie uzyskał zgody na natychmiastowe wykonanie umowy (digital_consent=NO). Klient zapłacił kartą (PAY167a) 699,00 zł.
+
+Klient korzystał z kursu przez 3 dni (download_started_flag=YES). Klient złożył oświadczenie o odstąpieniu (STMT167a) dnia 4 marca 2026. Sklep odmówił zwrotu wskazując na korzystanie z kursu.
+
+Ponieważ brak wymaganej zgody, klient ma prawo do zwrotu. Sąd może nakazać zwrot mimo faktycznego korzystania.

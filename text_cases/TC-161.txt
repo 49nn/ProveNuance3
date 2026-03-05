@@ -1,0 +1,5 @@
+Danuta Jabłońska (konsument) złożyła zamówienie O161a dnia 12 marca 2026 na AGD (produkt fizyczny P161) za 2 100,00 zł. Klientka wybrała COD. Towar dostarczono (DEL161a) dnia 17 marca 2026. Klientka odmówiła przyjęcia paczki, bo opakowanie było uszkodzone.
+
+Kurier zwrócił towar do sklepu ApliancePro Sp. z o.o. Klientka złożyła oświadczenie o odstąpieniu (STMT161a) dnia 18 marca 2026 – towar wadliwy (defective=YES) z wyglądu.
+
+Sklep wysłał nowy towar w nienaruszonym opakowaniu. Klientka przyjęła i zapłaciła COD (PAY161a) 2 100,00 zł.

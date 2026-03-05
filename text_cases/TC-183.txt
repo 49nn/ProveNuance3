@@ -1,0 +1,5 @@
+Natalia Orzechowska (konsument) złożyła zamówienie O183a dnia 2 kwietnia 2026 na wózek spacerowy (produkt fizyczny P183) za 2 800,00 zł. Klientka zapłaciła BLIKiem (PAY183a).
+
+Towar dostarczono (DEL183a) dnia 7 kwietnia 2026. Wózek był uszkodzony w transporcie (defective=YES) – złamane koło. Klientka złożyła oświadczenie o odstąpieniu (STMT183a) dnia 8 kwietnia 2026. Sklep BabyRide Sp. z o.o. natychmiast wysłał kuriera po wózek i zgodził się pokryć koszty (store_pays_return=YES).
+
+Sklep zwrócił pełną kwotę 2 800,00 zł w ciągu 5 dni.

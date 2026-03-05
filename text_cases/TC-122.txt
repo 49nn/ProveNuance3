@@ -1,0 +1,5 @@
+Przemysław Kowal (konsument) złożył zamówienie O122a dnia 4 lutego 2026 na wzory dokumentów prawnych (produkt cyfrowy P122). Sklep LegalDocs Sp. z o.o. przyjął zamówienie. Klient zapłacił przelewem (PAY122a) 199,00 zł.
+
+Sklep nie poprosił o zgodę na natychmiastowe wykonanie umowy (digital_consent=NO). Po 3 dniach klient pobrał wzory (download_started_flag=YES). Klient złożył oświadczenie o odstąpieniu (STMT122a) dnia 15 lutego 2026 – 11 dni po zakupie.
+
+Ponieważ sklep nie uzyskał wymaganej zgody, klient ma prawo do odstąpienia mimo pobrania plików.

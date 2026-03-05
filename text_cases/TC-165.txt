@@ -1,0 +1,5 @@
+Henryka Nowak (konsument) złożyła zamówienie O165a dnia 20 marca 2026 na elektronikę (produkt fizyczny P165) za 1 800,00 zł. Klientka zapłaciła kartą debetową (PAY165a). Po dostawie (DEL165a) dnia 25 marca 2026 klientka złożyła oświadczenie o odstąpieniu (STMT165a) dnia 30 marca 2026.
+
+Sklep ElektroFlex Sp. z o.o. przyjął zwrot. Klientka oczekuje zwrotu 1 800,00 zł na kartę debetową.
+
+Sklep przelał zwrot na konto bankowe klientki zamiast na kartę. Klientka kwestionuje formę zwrotu.

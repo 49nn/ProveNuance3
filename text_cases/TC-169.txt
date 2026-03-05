@@ -1,0 +1,5 @@
+Leszek Nowakowski (konsument) złożył zamówienie O169a dnia 5 marca 2026 na sprzęt audio (produkt fizyczny P169) za 4 500,00 zł. Jego konto A169 jest aktywne (account_status=ACTIVE). Klient zapłacił kartą (PAY169a).
+
+Towar dostarczono (DEL169a) dnia 10 marca 2026. Sprzęt wadliwy (defective=YES) – wzmacniacz nie włącza się. Klient złożył oświadczenie o odstąpieniu (STMT169a) dnia 12 marca 2026. Sklep AudioPremium Sp. z o.o. odmówił natychmiastowego zwrotu.
+
+Klient otworzył chargeback (chargeback_status=OPEN). Konto klienta zablokowane automatycznie (account_status=BLOCKED) do czasu rozstrzygnięcia chargebacku. Bank rozstrzygnął na korzyść klienta (chargeback_status=RESOLVED_CUSTOMER).

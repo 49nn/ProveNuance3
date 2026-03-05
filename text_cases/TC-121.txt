@@ -1,0 +1,5 @@
+Olga Wierzbicka (konsument) złożyła zamówienie O121a dnia 2 lutego 2026 na kurs fotografii (produkt cyfrowy P121). Sklep PhotoLearn Sp. z o.o. uzyskał zgodę na natychmiastowe wykonanie umowy (digital_consent=YES). Klientka zapłaciła kartą (PAY121a) 349,00 zł.
+
+Klientka nie pobrała żadnych materiałów (download_started_flag=NO). Po 5 dniach klientka złożyła oświadczenie o odstąpieniu (STMT121a), twierdząc że treść kursu była reklamowana fałszywie.
+
+Sklep odmówił zwrotu wskazując na udzieloną zgodę. Klientka kieruje sprawę do rzecznika konsumentów.

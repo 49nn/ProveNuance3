@@ -1,0 +1,5 @@
+Nina Kaczmarek (konsument) złożyła zamówienie O147a dnia 11 marca 2026 na zabawki za 180,00 zł (produkt fizyczny P147). Zastosowała kupon TOYS15 (15% rabatu, coupon_stackable=YES), wymagający min. 200,00 zł.
+
+Sklep PlayStore Sp. z o.o. odrzucił kupon – kwota zamówienia 180,00 zł nie spełnia wymogu minimalnego. Klientka dołożyła produkt o wartości 30,00 zł, osiągając kwotę 210,00 zł.
+
+Sklep ponownie zastosował kupon TOYS15 – 31,50 zł rabatu. Klientka zapłaciła kartą (PAY147a) 178,50 zł.

@@ -1,0 +1,5 @@
+Joanna Klocek (konsument) złożyła zamówienie O143a dnia 3 marca 2026 na elektronikę za 1 500,00 zł (produkt fizyczny P143). Zastosowała kupon FIRST10 (10% dla nowych klientów, coupon_stackable=YES). Klientka jest nową klientką.
+
+Sklep TechPlus Sp. z o.o. zweryfikował status nowej klientki i zastosował rabat 150,00 zł. Klientka zapłaciła kartą (PAY143a) 1 350,00 zł.
+
+Transakcja przebiegła prawidłowo.

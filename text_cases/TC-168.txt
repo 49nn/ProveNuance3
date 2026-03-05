@@ -1,0 +1,5 @@
+Karolina Baran (konsument) złożyła zamówienie O168a dnia 3 marca 2026 na kosmetyki za 500,00 zł (produkt fizyczny P168). Zastosowała kupon BEAUTY25 (25%, coupon_stackable=YES). Po rabacie zapłaciła kartą (PAY168a) 375,00 zł.
+
+Towar dostarczono (DEL168a) dnia 8 marca 2026. Klientka złożyła oświadczenie o odstąpieniu (STMT168a) dnia 16 marca 2026. Sklep BeautyBox Sp. z o.o. zwrócił 375,00 zł.
+
+Klientka oczekiwała zwrotu pełnej ceny 500,00 zł bez kuponu. Sklep wyjaśnił, że zwrot następuje w kwocie faktycznie zapłaconej.

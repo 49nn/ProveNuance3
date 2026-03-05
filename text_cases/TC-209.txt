@@ -1,0 +1,5 @@
+Aleksander Piotrowski (konsument) złożył zamówienie O209a dnia 24 maja 2026 na kurs programowania online (produkt cyfrowy P209). Sklep CodeLearn Sp. z o.o. nie uzyskał zgody (digital_consent=NO). Klient zapłacił kartą (PAY209a) 1 299,00 zł.
+
+Klient ukończył 60% kursu przez 4 tygodnie (download_started_flag=YES). Klient złożył oświadczenie o odstąpieniu (STMT209a) dnia 21 czerwca 2026.
+
+Ponieważ sklep nie uzyskał wymaganej zgody, sąd może przyznać klientowi prawo do zwrotu proporcjonalnego. Sprawa sporna.

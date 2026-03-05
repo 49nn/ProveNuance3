@@ -1,0 +1,5 @@
+Tomasz Wiśniewska (konsument) złożył zamówienie O188a dnia 12 kwietnia 2026 na drukarkę 3D (produkt fizyczny P188) za 2 900,00 zł. Klient zapłacił przelewem (PAY188a).
+
+Towar dostarczono (DEL188a) dnia 17 kwietnia 2026. Klient złożył oświadczenie o odstąpieniu (STMT188a) dnia 24 kwietnia 2026 – 7 dni po dostawie. Drukarka była testowo uruchomiona, wydrukowano jeden testowy model.
+
+Sklep 3DPrint Sp. z o.o. odmówił pełnego zwrotu, wskazując na widoczne ślady użytkowania filamentu. Klient twierdzi, że to normalny test.

@@ -1,0 +1,5 @@
+Wacław Olszewski (konsument) złożył zamówienie O127a dnia 14 lutego 2026 na kurs inwestowania (produkt cyfrowy P127). Sklep InvestLearn Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klient zapłacił kartą (PAY127a) 899,00 zł.
+
+Klient zalogował się i przeglądał materiały przez 10 dni (download_started_flag=YES). Następnie złożył oświadczenie o odstąpieniu (STMT127a) dnia 24 lutego 2026 twierdząc że kurs jest bezwartościowy.
+
+Sklep odmówił zwrotu. Klient otworzyła chargeback (chargeback_status=OPEN). Chargeback w trakcie rozpatrywania.

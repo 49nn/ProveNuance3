@@ -1,0 +1,5 @@
+Norbert Pawlak (konsument) złożył zamówienie O120a dnia 19 stycznia 2026 na okulary przeciwsłoneczne (produkt fizyczny P120). Sklep OpticMode Sp. z o.o. przyjął zamówienie. Klient zapłacił kartą (PAY120a) 340,00 zł.
+
+Towar dostarczono (DEL120a) dnia 24 stycznia 2026. Oprawki miały wadliwą zawiasę (defective=YES). Klient złożył oświadczenie o odstąpieniu (STMT120a) dnia 26 stycznia 2026. Sklep zgodził się pokryć koszty odesłania (store_pays_return=YES).
+
+Klient oczekuje pełnego zwrotu 340,00 zł.

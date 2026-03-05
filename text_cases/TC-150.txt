@@ -1,0 +1,5 @@
+Robert Adamski (konsument) złożył zamówienie O150a dnia 17 marca 2026 na artykuły do domu za 400,00 zł (produkt fizyczny P150). Zastosował kupon HOME10 (10% rabatu, coupon_stackable=NO) oraz kupon SPRING15 (15%, coupon_stackable=NO).
+
+Sklep HomeDecor Sp. z o.o. odmówił łączenia dwóch niełączalnych kuponów. Klient musiał wybrać jeden. Klient wybrał SPRING15 (wyższy rabat = 60,00 zł). Zapłacił kartą (PAY150a) 340,00 zł.
+
+Transakcja prawidłowa.

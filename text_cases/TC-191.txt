@@ -1,0 +1,5 @@
+Ewa Malinowska (konsument) złożyła zamówienie O191a dnia 18 kwietnia 2026 na odzież w rozmiarze XL (produkt fizyczny P191) za 230,00 zł. Klientka zapłaciła kartą (PAY191a).
+
+Towar dostarczono (DEL191a) dnia 23 kwietnia 2026. Klientka otrzymała rozmiar M – błąd magazynowy. Klientka złożyła oświadczenie o odstąpieniu (STMT191a) dnia 24 kwietnia 2026. Sklep Fashion4U Sp. z o.o. przeprosił i wysłał właściwy rozmiar ekspresem.
+
+Klientka otrzymała właściwy rozmiar XL dnia 26 kwietnia 2026. Zakończyła reklamację.

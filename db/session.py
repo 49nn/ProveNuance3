@@ -13,7 +13,7 @@ from nn.graph_builder import ClusterSchema, ClusterStateRow
 
 from .case_repo import load_case as load_case_data
 from .case_repo import resolve_case_id_int
-from .cluster_repo import upsert_cluster_states
+from .cluster_repo import resolve_existing_entity_ids as _resolve_existing_entity_ids, upsert_cluster_states
 from .connection import connect as connect_db
 from .entity_repo import link_or_upsert_entity, upsert_entity
 from .fact_repo import attach_proof_run_to_facts, upsert_fact
@@ -127,8 +127,11 @@ class DBSession:
             if source_text is not None:
                 self._upsert_source(result.source_id, source_text)
 
+            # Zapisz encje i zbierz mapowanie old_id → actual_db_id
+            entity_id_map: dict[str, str] = {}
             for entity in result.entities:
-                link_or_upsert_entity(self.conn, entity)
+                actual_id = link_or_upsert_entity(self.conn, entity)
+                entity_id_map[entity.entity_id] = actual_id
 
             for fact in result.facts:
                 fact_to_save = (
@@ -138,7 +141,22 @@ class DBSession:
                 )
                 upsert_fact(self.conn, fact_to_save, case_id_int)
 
-            upsert_cluster_states(self.conn, result.cluster_states, case_id_int)
+            # Przepisz entity_id w cluster_states na faktyczny DB-id;
+            # pomiń stany których encja nie istnieje w DB (LLM halucynacja / brak w entities).
+            remapped: list[ClusterStateRow] = []
+            for cs in result.cluster_states:
+                actual_eid = entity_id_map.get(cs.entity_id, cs.entity_id)
+                remapped.append(ClusterStateRow(
+                    entity_id=actual_eid,
+                    cluster_name=cs.cluster_name,
+                    logits=cs.logits,
+                    is_clamped=cs.is_clamped,
+                    clamp_hard=cs.clamp_hard,
+                    clamp_source=cs.clamp_source,
+                ))
+            known_eids = _resolve_existing_entity_ids(self.conn, {cs.entity_id for cs in remapped})
+            remapped = [cs for cs in remapped if cs.entity_id in known_eids]
+            upsert_cluster_states(self.conn, remapped, case_id_int)
         self.conn.commit()
 
     # ------------------------------------------------------------------

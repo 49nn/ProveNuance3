@@ -8,6 +8,21 @@ import psycopg
 from nn.graph_builder import ClusterStateRow
 
 
+def resolve_existing_entity_ids(
+    conn: psycopg.Connection,
+    entity_ids: set[str],
+) -> set[str]:
+    """Zwraca podzbiór entity_ids które faktycznie istnieją w tabeli entities."""
+    if not entity_ids:
+        return set()
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT entity_id FROM entities WHERE entity_id = ANY(%s)",
+            (list(entity_ids),),
+        )
+        return {row[0] for row in cur.fetchall()}
+
+
 def _resolve_entity_db_ids(
     conn: psycopg.Connection,
     entity_ids: list[str],

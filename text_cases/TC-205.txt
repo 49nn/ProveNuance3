@@ -1,0 +1,5 @@
+Tadeusz Mazurek (konsument) złożył zamówienie O205a dnia 16 maja 2026 na telewizor (produkt fizyczny P205) za 5 500,00 zł. Klient zapłacił kartą (PAY205a). Jego konto A205 jest aktywne (account_status=ACTIVE).
+
+Towar dostarczono (DEL205a) dnia 21 maja 2026. Klient złożył oświadczenie o odstąpieniu (STMT205a) dnia 27 maja 2026 – 6 dni po dostawie. Telewizor był zamontowany na ścianie (ślady montażu widoczne).
+
+Sklep TVShopPro Sp. z o.o. przyjął zwrot z potrąceniem 300,00 zł kosztów demontażu i uszkodzenia opakowania. Klient kwestionuje potrącenie.

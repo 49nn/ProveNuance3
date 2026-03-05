@@ -1,0 +1,5 @@
+Firma Delta S.A. (klient biznesowy) złożyła zamówienie O134a dnia 8 marca 2026 na 200 licencji oprogramowania biurowego (produkt cyfrowy P134) za 60 000,00 zł. Sklep BizSoft Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klient zapłacił przelewem (PAY134a).
+
+Licencje aktywowano na 50 stanowiskach (download_started_flag=YES). Po tygodniu okazało się, że producent oprogramowania unieważnił klucze jako pochodzące z nieautoryzowanego kanału dystrybucji. Klient złożył oświadczenie (STMT134a) dnia 15 marca 2026.
+
+Klient żąda pełnego zwrotu i odszkodowania. Sklep twierdzi, że nie ponosi odpowiedzialności za decyzję producenta.

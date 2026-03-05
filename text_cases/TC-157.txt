@@ -1,0 +1,5 @@
+Zbigniew Adamczyk złożył zamówienie O157a dnia 8 marca 2026 na meble (produkt fizyczny P157). Jego konto A157 jest zablokowane (account_status=BLOCKED) z powodu wcześniejszego nieuprawnionego działania osoby trzeciej, która używała jego danych (password_shared=YES).
+
+Sklep FurnitureMax Sp. z o.o. automatycznie odrzucił zamówienie. Klient złożył wniosek o odblokowanie, dostarczając dokumenty potwierdzające kradzież tożsamości.
+
+Sprawa w toku w dziale bezpieczeństwa sklepu.

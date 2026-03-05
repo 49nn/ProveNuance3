@@ -1,0 +1,5 @@
+Walentyna Kowalczyk (konsument) złożyła zamówienie O178a dnia 23 marca 2026 na kurs jogi online (produkt cyfrowy P178). Sklep YogaOnline Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klientka zapłaciła kartą (PAY178a) 299,00 zł.
+
+Klientka zalogowała się, ale odkryła, że filmiki nie mają napisów, choć była zapowiedź wersji z napisami dla głuchych (defective=YES). Klientka nie obejrzała żadnego kursu (download_started_flag=NO – technicznie zalogowano ale bez konsumpcji treści). Klientka złożyła oświadczenie o odstąpieniu (STMT178a) dnia 25 marca 2026.
+
+Sklep zwrócił 299,00 zł z powodu wadliwego opisu produktu.

@@ -1,0 +1,5 @@
+Franciszek Baran (konsument) złożył zamówienie O192a dnia 20 kwietnia 2026 na zestaw narzędzi (produkt fizyczny P192) za 780,00 zł. Klient zapłacił kartą (PAY192a). Jego konto A192 jest aktywne (account_status=ACTIVE).
+
+Towar dostarczono (DEL192a) dnia 25 kwietnia 2026. Zestaw był kompletny. Klient złożył oświadczenie o odstąpieniu (STMT192a) dnia 4 maja 2026 bez podania powodu – prawo konsumenckie.
+
+Sklep ToolBox Sp. z o.o. przyjął zwrot. Referencyjny przypadek bezproblemowego odstąpienia.

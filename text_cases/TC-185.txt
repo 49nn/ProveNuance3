@@ -1,0 +1,5 @@
+Paulina Ząbek (konsument) złożyła zamówienie O185a dnia 6 kwietnia 2026 na buty skórzane (produkt fizyczny P185) za 560,00 zł. Klientka zapłaciła COD (PAY185a) przy dostawie (DEL185a) dnia 11 kwietnia 2026.
+
+Klientka stwierdziła, że skóra na butach jest sztuczna, mimo że w opisie był podany „skóra naturalna" (defective=YES – wada opisu). Klientka złożyła oświadczenie o odstąpieniu (STMT185a) dnia 13 kwietnia 2026.
+
+Sklep ShoesGallery Sp. z o.o. przyjął reklamację i przyjął zwrot. Klientka oczekuje zwrotu 560,00 zł przelewem.

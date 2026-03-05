@@ -1,0 +1,5 @@
+Róża Kowalczyk (konsument) złożyła zamówienie O123a dnia 6 lutego 2026 na e-book z przepisami (produkt cyfrowy P123). Sklep CookBook Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klientka zapłaciła BLIKiem (PAY123a) 29,00 zł.
+
+Klientka próbowała pobrać e-book, ale link nie działał (błąd serwera). Plik nie został pobrany (download_started_flag=NO – wina sklepu). Klientka złożyła oświadczenie o odstąpieniu (STMT123a) dnia 8 lutego 2026.
+
+Sklep przeprosił za błąd techniczny i zwrócił 29,00 zł bez sporu.

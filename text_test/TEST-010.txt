@@ -1,0 +1,5 @@
+Michal Wroblewski (konsument) zlozyl zamowienie O5010 dnia 28 stycznia 2026 na rower elektryczny (produkt fizyczny P5010) za 7 500,00 zl. Klient zaplacil przelewem (PAY5010). Jego konto A5010 jest aktywne (account_status=ACTIVE).
+
+Towar dostarczono (DEL5010) dnia 4 lutego 2026. Klient zlozyl oswiadczenie o odstapeniu (STMT5010) dnia 14 lutego 2026 – 10 dni po dostawie. Rower nieuzywany w oryginalnym opakowaniu.
+
+Sklep EBikeWorld Sp. z o.o. przyjal zwrot. Klient oczekuje zwrotu 7 500,00 zl.

@@ -1,0 +1,5 @@
+Laura Nowak (konsument) złożyła zamówienie O145a dnia 7 marca 2026 na kosmetyki za 250,00 zł (produkt fizyczny P145). Zastosowała kupon COMBO15 (15% rabatu, coupon_stackable=NO). Dodała też kupon EXTRA10 (10% rabatu, coupon_stackable=YES).
+
+Sklep PerfumeShop Sp. z o.o. odrzucił kupon EXTRA10, ponieważ COMBO15 jest niełączony. Klientka niezadowolona.
+
+Klientka odwołała się – sklep podtrzymał decyzję. Reguła niełączności jest prawidłowo zastosowana.

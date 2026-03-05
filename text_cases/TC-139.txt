@@ -1,0 +1,5 @@
+Felicja Zawadzka (konsument) złożyła zamówienie O139a dnia 11 lutego 2026 na biżuterię (produkt fizyczny P139). Sklep SilverGold Sp. z o.o. przyjął zamówienie. Klientka zapłaciła kartą (PAY139a) 1 900,00 zł.
+
+Towar dostarczono (DEL139a) dnia 16 lutego 2026. Klientka złożyła oświadczenie o odstąpieniu (STMT139a) dnia 26 lutego 2026. Sklep przyjął zwrot i potwierdził inicjację przelewu zwrotnego. Przelew nie dotarł po 3 tygodniach. Klientka otworzyła chargeback (chargeback_status=OPEN).
+
+Sklep wykazał potwierdzenie przelewu. Chargeback zamknięty (chargeback_status=RESOLVED_STORE) – opóźnienie po stronie banku.

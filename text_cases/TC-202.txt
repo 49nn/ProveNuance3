@@ -1,0 +1,5 @@
+Piotr Jankowski (konsument) złożył zamówienie O202a dnia 10 maja 2026 na 10 sztuk artykułów biurowych (produkt fizyczny P202) za 950,00 zł. Klient zapłacił BLIKiem (PAY202a). Sklep OfficeMax Sp. z o.o. dostarczył tylko 7 sztuk (DEL202a) dnia 15 maja 2026.
+
+Klient złożył oświadczenie o odstąpieniu (STMT202a) dnia 17 maja 2026 – dostawa niekompletna (defective=YES). Sklep zaproponował dosłanie brakujących 3 sztuk.
+
+Klient odrzucił propozycję i żąda zwrotu całości zamówienia 950,00 zł.

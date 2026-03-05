@@ -1,0 +1,5 @@
+Sylwia Pawlak (konsument) złożyła zamówienie O187a dnia 10 kwietnia 2026 na kurs języka angielskiego (produkt cyfrowy P187). Sklep LangMaster Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klientka zapłaciła kartą (PAY187a) 449,00 zł.
+
+Klientka ukończyła kurs w całości przez 30 dni (download_started_flag=YES). Po ukończeniu złożyła oświadczenie o odstąpieniu (STMT187a) dnia 10 maja 2026, twierdząc że certyfikat nie jest uznawany przez żadną instytucję.
+
+Sklep odmówił – klientka w pełni skorzystała z kursu po udzieleniu zgody. Chargeback (chargeback_status=OPEN) – bank rozstrzygnął na korzyść sklepu (chargeback_status=RESOLVED_STORE).

@@ -1,0 +1,5 @@
+Sylwia Dąbrowska (konsument) złożyła zamówienie O204a dnia 14 maja 2026 na akwarium z osprzętem (produkt fizyczny P204) za 1 500,00 zł. Klientka zapłaciła przelewem (PAY204a).
+
+Towar dostarczono (DEL204a) dnia 19 maja 2026. Akwarium pęknięte – towar wadliwy (defective=YES). Klientka złożyła oświadczenie o odstąpieniu (STMT204a) dnia 20 maja 2026. Sklep AquaWorld Sp. z o.o. zaakceptował zwrot i zgodził się pokryć koszty odesłania (store_pays_return=YES).
+
+Klientka oczekuje zwrotu pełnej kwoty 1 500,00 zł.

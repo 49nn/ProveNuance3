@@ -1,0 +1,5 @@
+Urszula Zając (konsument) złożyła zamówienie O126a dnia 12 lutego 2026 na oprogramowanie do edycji wideo (produkt cyfrowy P126). Sklep VideoSoft Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klientka zapłaciła kartą (PAY126a) 449,00 zł.
+
+Klientka pobrała i zainstalowała oprogramowanie (download_started_flag=YES), ale udostępniła klucz licencyjny koleżance (password_shared=YES). Klientka złożyła oświadczenie o odstąpieniu (STMT126a) dnia 16 lutego 2026.
+
+Sklep zablokował licencję koleżanki i odmówił zwrotu – naruszenie regulaminu i korzystanie z produktu po zgodzie.

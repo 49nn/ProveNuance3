@@ -1,0 +1,5 @@
+Leszek Kowalski (konsument) złożył zamówienie O198a dnia 2 maja 2026 na klimatyzator przenośny (produkt fizyczny P198) za 1 900,00 zł. Klient zapłacił przelewem (PAY198a).
+
+Towar dostarczono (DEL198a) dnia 7 maja 2026. Klient złożył oświadczenie o odstąpieniu (STMT198a) dnia 21 maja 2026 – 14 dni po dostawie (ostatni dzień). Klimatyzator był rozpakowany ale nieużywany. Klient odesłał towar (RS198a).
+
+Sklep CoolAir Sp. z o.o. przyjął zwrot. Klient oczekuje zwrotu 1 900,00 zł.

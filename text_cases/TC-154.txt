@@ -1,0 +1,5 @@
+Waldemar Malinowski złożył wniosek o odblokowanie konta A154 (account_status=BLOCKED) dnia 5 marca 2026. Konto zostało zablokowane z powodu trzech nieudanych prób płatności z rzędu.
+
+Klient skontaktował się z działem obsługi, wyjaśnił sytuację i zaktualizował dane karty. Sklep SuperShop Sp. z o.o. odblokował konto (account_status=ACTIVE) dnia 6 marca 2026 po weryfikacji.
+
+Klient złożył nowe zamówienie O154a na kwotę 780,00 zł dnia 6 marca 2026.

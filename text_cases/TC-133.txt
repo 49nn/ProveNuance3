@@ -1,0 +1,5 @@
+Spółka Gamma Sp. z o.o. (klient biznesowy) złożyła zamówienie O133a dnia 6 marca 2026 na papier do drukarek (produkt fizyczny P133) za 8 000,00 zł. Sklep OfficeSupply Sp. z o.o. przyjął zamówienie. Klient zapłacił przelewem (PAY133a).
+
+Towar dostarczono (DEL133a) dnia 11 marca 2026. Po otwarciu paczek okazało się, że gramatura papieru jest niezgodna ze specyfikacją zamówienia (defective=YES). Klient złożył reklamację dnia 12 marca 2026 i odesłał całość (RS133a).
+
+Sklep uznał reklamację i zobowiązał się wymienić towar na właściwy w ciągu 5 dni roboczych.

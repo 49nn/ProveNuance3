@@ -1,0 +1,5 @@
+Benedykta Wiśniewska (konsument) złożyła zamówienie O210a dnia 26 maja 2026 na lodówkę Side-by-Side (produkt fizyczny P210) za 6 800,00 zł. Klientka zapłaciła przelewem (PAY210a). Zastosowała kupon FRIDGE500 (500 zł rabatu, coupon_stackable=YES, wymagane min. 5 000,00 zł). Po rabacie zapłaciła 6 300,00 zł.
+
+Towar dostarczono i wciśnięto do kuchni (DEL210a) dnia 31 maja 2026. Klientka stwierdziła że lodówka nie mieści się w zaplanowanym miejscu (wymiary inne niż podane). Klientka złożyła oświadczenie o odstąpieniu (STMT210a) dnia 2 czerwca 2026.
+
+Sklep HomeAppliance Sp. z o.o. przyjął zwrot z powodu błędnych wymiarów w opisie i zwrócił 6 300,00 zł (kwota faktycznie zapłacona po rabacie).

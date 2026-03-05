@@ -1,0 +1,5 @@
+Oskar Mazurek (konsument) złożył zamówienie O148a dnia 13 marca 2026 na elektronikę za 3 000,00 zł (produkt fizyczny P148). Zastosował dwa kupony: VIP30 (30%, coupon_stackable=YES) i LOYAL10 (10%, coupon_stackable=YES) oraz EXTRA5 (5%, coupon_stackable=YES).
+
+Sklep EliteTech Sp. z o.o. zastosował łącznie 45% rabatu = 1 350,00 zł. Klient zapłacił kartą (PAY148a) 1 650,00 zł.
+
+Transakcja prawidłowa – wszystkie trzy kupony są łączalne.

@@ -1,0 +1,5 @@
+Sabina Wróbel złożyła zamówienie O151a dnia 1 marca 2026 na odzież sportową (produkt fizyczny P151). Jej konto A151 jest aktywne (account_status=ACTIVE). Klientka zapłaciła kartą (PAY151a) 460,00 zł.
+
+Towar dostarczono (DEL151a) dnia 6 marca 2026. Klientka złożyła oświadczenie o odstąpieniu (STMT151a) dnia 16 marca 2026. Towar odesłano (RS151a). Sprawa zakończyła się zwrotem.
+
+Referencyjny przypadek aktywnego konta z prawidłowym odstąpieniem.

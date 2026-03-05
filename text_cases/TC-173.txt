@@ -1,0 +1,5 @@
+Paweł Sikora (konsument) złożył zamówienie O173a dnia 13 marca 2026 na sprzęt fitness za 2 200,00 zł (produkt fizyczny P173). Klient zapłacił kartą (PAY173a). Zastosował kupon MOVE15 (15%, coupon_stackable=YES). Po rabacie zapłacił 1 870,00 zł.
+
+Towar dostarczono (DEL173a) dnia 18 marca 2026. Klient złożył oświadczenie o odstąpieniu (STMT173a) dnia 28 marca 2026. Sklep FitStore Sp. z o.o. zwrócił 1 870,00 zł.
+
+Sprawa zakończona prawidłowo – zwrot kwoty faktycznie zapłaconej.

@@ -1,0 +1,5 @@
+Celina Mazur złożyła zamówienie O160a dnia 11 marca 2026 na odzież (produkt fizyczny P160). Jej konto A160 jest aktywne (account_status=ACTIVE). Klientka zapłaciła kartą (PAY160a) 340,00 zł.
+
+Klientka udostępniła dane logowania córce, która złożyła zamówienie O160b na dodatkowe artykuły za 280,00 zł (password_shared=YES). Sklep Fashion&Co Sp. z o.o. zrealizował oba zamówienia.
+
+Klientka żąda zwrotu za O160b twierdząc, że córka działała bez upoważnienia. Sklep odmówił – zamówienie złożono z autoryzowanego konta.

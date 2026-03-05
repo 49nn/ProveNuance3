@@ -1,0 +1,5 @@
+Ksenia Bąk (konsument) złożyła zamówienie O179a dnia 25 marca 2026 na zestaw pościeli (produkt fizyczny P179) za 420,00 zł. Klientka zastosowała kupon BED20 (20%, coupon_stackable=YES). Po rabacie zapłaciła kartą (PAY179a) 336,00 zł.
+
+Towar dostarczono (DEL179a) dnia 30 marca 2026. Klientka złożyła oświadczenie o odstąpieniu (STMT179a) dnia 5 kwietnia 2026 – 6 dni po dostawie. Pościel nieużywana i w oryginalnym opakowaniu.
+
+Sklep BedStore Sp. z o.o. zwrócił 336,00 zł (kwota faktycznie zapłacona po rabacie).

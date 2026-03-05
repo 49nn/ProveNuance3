@@ -1,0 +1,5 @@
+Diana Wiśniewska (konsument) złożyła zamówienie O137a dnia 7 lutego 2026 na kosmetyki (produkt fizyczny P137). Sklep GlowUp Sp. z o.o. przyjął zamówienie. Klientka zapłaciła kartą (PAY137a) 580,00 zł.
+
+Towar dostarczono (DEL137a) dnia 12 lutego 2026. Klientka twierdziła, że produkty są podróbkami (defective=YES). Sklep zaprzeczył. Klientka nie złożyła formalnego oświadczenia o odstąpieniu. Otworzyła chargeback (chargeback_status=OPEN) bezpośrednio.
+
+Bank poprosił o ekspertyzę. Klientka nie dostarczyła dowodów. Chargeback zamknięty na korzyść sklepu (chargeback_status=RESOLVED_STORE).

@@ -1,0 +1,5 @@
+Helena Kubiak (konsument) złożyła zamówienie O141a dnia 15 lutego 2026 na telefonię VoIP (produkt cyfrowy P141) – abonament roczny. Sklep VoIPPro Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klientka zapłaciła kartą (PAY141a) 1 200,00 zł.
+
+Klientka korzystała z usługi przez 1 miesiąc (download_started_flag=YES). Usługa wielokrotnie się zrywała – wada techniczna (defective=YES). Klientka złożyła oświadczenie o odstąpieniu (STMT141a) dnia 15 marca 2026. Sklep odmówił proporcjonalnego zwrotu.
+
+Klientka otworzyła chargeback (chargeback_status=OPEN). Chargeback w toku.

@@ -1,0 +1,5 @@
+Ireneusz Walczak (konsument) złożył zamówienie O142a dnia 17 lutego 2026 na zestaw audio premium (produkt fizyczny P142). Sklep AudioElite Sp. z o.o. przyjął zamówienie. Klient zapłacił kartą (PAY142a) 8 500,00 zł.
+
+Towar nie dotarł (DEL142a – brak) po 3 tygodniach. Sklep podał numer śledzenia ale paczka utknęła w sortowni. Klient otworzył chargeback (chargeback_status=OPEN). Bank zamroził płatność.
+
+Sklep wysłał nową przesyłkę. Klient cofnął chargeback (chargeback_status=RESOLVED_STORE) po otrzymaniu towaru.

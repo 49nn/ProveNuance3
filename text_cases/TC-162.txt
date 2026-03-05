@@ -1,0 +1,5 @@
+Emil Nowak (konsument) złożył zamówienie O162a dnia 14 marca 2026 na rower (produkt fizyczny P162) za 3 500,00 zł. Klient zapłacił BLIKiem (PAY162a). Transakcja zautoryzowana, ale sklep Bike&More Sp. z o.o. twierdzi, że środki wpłynęły z opóźnieniem 2 dni.
+
+Sklep wstrzymał wysyłkę do czasu potwierdzenia płatności. Klient ma potwierdzenie z aplikacji.
+
+Operator płatności potwierdził transakcję po 48 godzinach. Rower wysłano (DEL162a) dnia 17 marca 2026.

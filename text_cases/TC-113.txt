@@ -1,0 +1,5 @@
+Franciszek Kot (konsument) złożył zamówienie O113a dnia 5 stycznia 2026 na telewizor 75 cali (produkt fizyczny P113). Sklep TVMaster Sp. z o.o. przyjął zamówienie. Klient zapłacił przelewem (PAY113a) 5 200,00 zł.
+
+Towar dostarczono (DEL113a) dnia 10 stycznia 2026. Klient złożył oświadczenie o odstąpieniu (STMT113a) dnia 12 stycznia 2026 – 2 dni po dostawie. Telewizor jest sprawny, klient zmienił zdanie po rozpakowaniu.
+
+Sklep przyjął zwrot lecz potrącił 150,00 zł kosztów transportu (TV gabarytowe). Klient kwestionuje potrącenie.

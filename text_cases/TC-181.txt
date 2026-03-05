@@ -1,0 +1,5 @@
+Leokadia Wiśniewska (konsument) złożyła zamówienie O181a dnia 29 marca 2026 na artykuły dla niemowlaka (produkt fizyczny P181) za 340,00 zł. Klientka zapłaciła kartą (PAY181a).
+
+Towar dostarczono (DEL181a) dnia 3 kwietnia 2026. Klientka stwierdziła, że smoczki w zestawie zawierają składniki szkodliwe – bisfenol A (defective=YES). Klientka złożyła oświadczenie o odstąpieniu (STMT181a) dnia 5 kwietnia 2026 i odesłała towar (RS181a).
+
+Sklep BabyFirst Sp. z o.o. zlecił niezależne badania. W oczekiwaniu na wyniki przyjął towar zwrotnie i wstrzymał jego sprzedaż.

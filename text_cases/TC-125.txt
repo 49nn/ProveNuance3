@@ -1,0 +1,5 @@
+Teresa Adamczyk (konsument) złożyła zamówienie O125a dnia 10 lutego 2026 na dostęp do biblioteki muzycznej (produkt cyfrowy P125). Sklep MusicLib Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klientka zapłaciła kartą (PAY125a) 79,00 zł / miesiąc.
+
+Klientka odtworzyła kilka utworów (download_started_flag=YES). Po 2 dniach złożyła oświadczenie o odstąpieniu (STMT125a), twierdząc że jakość dźwięku nie odpowiada opisowi.
+
+Sklep odmówił zwrotu. Klientka otworzyła chargeback (chargeback_status=OPEN). Bank rozstrzygnął na korzyść sklepu (chargeback_status=RESOLVED_STORE).

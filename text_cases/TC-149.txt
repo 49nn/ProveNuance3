@@ -1,0 +1,5 @@
+Patrycja Wojciechowska (konsument) złożyła zamówienie O149a dnia 15 marca 2026 na odzież za 600,00 zł (produkt fizyczny P149). Zastosowała kupon FLASH50 (50% rabatu, ważny tylko 15 marca 2026, coupon_stackable=NO).
+
+Sklep QuickFashion Sp. z o.o. zweryfikował datę ważności kuponu (15 marca 2026) i zastosował rabat 300,00 zł. Klientka zapłaciła BLIKiem (PAY149a) 300,00 zł.
+
+Transakcja prawidłowa – kupon był aktywny w dniu zakupu.

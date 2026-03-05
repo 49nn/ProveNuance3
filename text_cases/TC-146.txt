@@ -1,0 +1,5 @@
+Marek Okoński (konsument) złożył zamówienie O146a dnia 9 marca 2026 na sprzęt sportowy za 550,00 zł (produkt fizyczny P146). Zastosował kupon SPORT25 (25% rabatu, coupon_stackable=YES), wymagający zakupu za min. 500,00 zł.
+
+Sklep SportZone Sp. z o.o. zastosował rabat 137,50 zł. Klient zapłacił BLIKiem (PAY146a) 412,50 zł.
+
+Transakcja prawidłowa – warunek minimalnej kwoty spełniony.

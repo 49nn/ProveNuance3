@@ -1,0 +1,5 @@
+Zofia Kubiak (konsument) złożyła zamówienie O128a dnia 16 lutego 2026 na subskrypcję narzędzia SaaS (produkt cyfrowy P128). Sklep SaaSTool Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klientka zapłaciła kartą (PAY128a) 199,00 zł miesięcznie.
+
+Klientka korzystała z narzędzia przez 1 dzień (download_started_flag=YES) i stwierdziła, że interfejs jest nieprzetłumaczony, mimo że reklama zapowiadała wersję polską. Klientka złożyła oświadczenie o odstąpieniu (STMT128a) dnia 17 lutego 2026.
+
+Sklep przyjął reklamację z powodu fałszywego opisu i zwrócił 199,00 zł.

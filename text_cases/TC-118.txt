@@ -1,0 +1,5 @@
+Lech Mazur (konsument) złożył zamówienie O118a dnia 15 stycznia 2026 na torbę skórzaną (produkt fizyczny P118). Sklep LuxBag Sp. z o.o. przyjął zamówienie. Klient zapłacił kartą (PAY118a) 890,00 zł.
+
+Towar dostarczono (DEL118a) dnia 20 stycznia 2026. Klient złożył oświadczenie o odstąpieniu (STMT118a) dnia 3 lutego 2026 – 14 dni po dostawie (termin upłynął 3 lutego). Klient wysłał wiadomość e-mail z oświadczeniem o godz. 18:00.
+
+Sklep kwestionuje termin twierdząc, że 14. dzień to 3 lutego, a e-mail wpłynął po godzinach pracy. Klient twierdzi, że termin jest zachowany.

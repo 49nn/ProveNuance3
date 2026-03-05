@@ -1,0 +1,5 @@
+Agnieszka Kowal (konsument) zlozyla zamowienie O5009 dnia 26 stycznia 2026 na kurs gotowania online (produkt cyfrowy P5009). Sklep CookMaster Sp. z o.o. nie uzyskal zgody na natychmiastowe wykonanie umowy (digital_consent=NO). Klientka zaplacila BLIKiem (PAY5009) 199,00 zl.
+
+Klientka ogladala kursy przez 7 dni (download_started_flag=YES). Klientka zlozyla oswiadczenie o odstapeniu (STMT5009) dnia 2 lutego 2026.
+
+Poniewaz brak wymaganej zgody, klientka ma prawo do zwrotu mimo korzystania z kursu.

@@ -1,0 +1,5 @@
+Stefan Wierzbicki (konsument) złożył zamówienie O175a dnia 17 marca 2026 na zestaw narzędzi ogrodowych (produkt fizyczny P175) za 650,00 zł. Klient wybrał COD. Towar dostarczono (DEL175a) dnia 22 marca 2026, klient zapłacił przy odbiorze.
+
+Klient złożył oświadczenie o odstąpieniu (STMT175a) dnia 1 kwietnia 2026 – 10 dni po dostawie. Towar w oryginalnym, nierozpakowanym stanie. Towar odesłano (RS175a).
+
+Sklep GardenTools Sp. z o.o. zobowiązał się zwrócić 650,00 zł przelewem.

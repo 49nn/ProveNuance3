@@ -1,0 +1,5 @@
+Oleg Kowalski (konsument) złożył zamówienie O184a dnia 4 kwietnia 2026 na zestaw ogrodowy (produkt fizyczny P184) za 1 100,00 zł. Klient zapłacił kartą (PAY184a).
+
+Towar dostarczono (DEL184a) dnia 9 kwietnia 2026. Klient złożył oświadczenie o odstąpieniu (STMT184a) dnia 23 kwietnia 2026 – dokładnie 14 dni po dostawie (ostatni dzień ustawowy). Towar w oryginalnym opakowaniu, nieużywany.
+
+Sklep GardenMax Sp. z o.o. zobowiązany do przyjęcia zwrotu – termin zachowany. Zwrot 1 100,00 zł zostanie przelany w ciągu 14 dni.

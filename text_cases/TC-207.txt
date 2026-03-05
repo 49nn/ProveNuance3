@@ -1,0 +1,5 @@
+Władysław Adamski (konsument) złożył zamówienie O207a dnia 20 maja 2026 na komputer gamingowy (produkt fizyczny P207) za 8 900,00 zł. Klient zapłacił przelewem (PAY207a).
+
+Towar dostarczono (DEL207a) dnia 25 maja 2026. Klient złożył oświadczenie o odstąpieniu (STMT207a) dnia 26 maja 2026 – 1 dzień po dostawie. Komputer był uruchomiony, zainstalowano system i gry. Klient chce zwrotu twierdząc, że moc procesora jest inna niż w specyfikacji.
+
+Sklep GamingPro Sp. z o.o. odmówił wskazując na ślady użytkowania. Klient otworzył chargeback (chargeback_status=OPEN).

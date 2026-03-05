@@ -1,0 +1,5 @@
+Irma Kowalczyk (konsument) złożyła zamówienie O166a dnia 22 marca 2026 na zegarek smartwatch (produkt fizyczny P166) za 1 200,00 zł. Sklep SmartWear Sp. z o.o. przyjął zamówienie. Klientka zapłaciła kartą (PAY166a).
+
+Towar dostarczono (DEL166a) dnia 27 marca 2026. Zegarek miał wadliwą baterię (defective=YES). Klientka złożyła oświadczenie o odstąpieniu (STMT166a) dnia 29 marca 2026. Sklep zgodził się pokryć koszty odesłania (store_pays_return=YES). Klientka otworzyła chargeback (chargeback_status=OPEN) równolegle, zanim sklep zdążył zwrócić pieniądze.
+
+Sklep zwrócił środki. Chargeback zamknięty (chargeback_status=RESOLVED_STORE) – klientka już otrzymała zwrot.

@@ -1,0 +1,5 @@
+Urszula Malinowska (konsument) złożyła zamówienie O177a dnia 21 marca 2026 na tablet dla dziecka (produkt fizyczny P177) za 900,00 zł. Klientka zapłaciła BLIKiem (PAY177a).
+
+Towar dostarczono (DEL177a) dnia 26 marca 2026. Tablet miał pęknięty ekran fabrycznie (defective=YES). Klientka złożyła oświadczenie o odstąpieniu (STMT177a) dnia 28 marca 2026. Sklep KidsTab Sp. z o.o. zakwestionował wadę twierdząc, że ekran pęknął przy rozpakowaniu.
+
+Klientka ma zdjęcia z rozpakowywania potwierdzające uszkodzenie fabryczne. Sprawa skierowana do rzecznika.
