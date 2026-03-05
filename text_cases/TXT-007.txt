@@ -1,0 +1,5 @@
+Pan Tomasz Dąbrowski (konsument) złożył zamówienie O700 na laptop (produkt fizyczny PROD7) dnia 10 lutego 2026 w sklepie KomputerPlus Sp. z o.o. Sklep przyjął zamówienie. Klient zapłacił kartą kredytową (PAY7) kwotę 4 299,00 zł dnia 10 lutego 2026.
+
+Dostawa DEL7 nastąpiła 14 lutego 2026. Laptop okazał się niezgodny z opisem — reklamacja C701 złożona 15 lutego 2026. Sklep nie odpowiedział w terminie 14 dni.
+
+Klient złożył wniosek o chargeback CB700 w swoim banku dnia 5 marca 2026. Bank zbadał sprawę i dnia 20 marca 2026 rozstrzygnął chargeback na korzyść klienta — środki 4 299,00 zł zostały zwrócone na kartę.

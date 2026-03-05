@@ -1,0 +1,7 @@
+Klient Jan Nowak (konsument) złożył zamówienie O200 w dniu 5 lutego 2026 roku na parę butów sportowych (produkt fizyczny PROD2). Sklep Obuwniczy Sp. z o.o. przyjął zamówienie tego samego dnia. Klient zapłacił kartą kredytową kwotę 349,00 zł za pośrednictwem płatności PAY2 w dniu 5 lutego 2026.
+
+Towar został dostarczony kurierem DHL (dostawa DEL2) w dniu 10 lutego 2026. Klient przymierzył buty i stwierdził, że nie odpowiadają mu pod względem stylu.
+
+Dnia 20 lutego 2026 klient złożył pisemne oświadczenie o odstąpieniu od umowy (STMT2) w ustawowym terminie 14 dni od dnia dostawy. Tego samego dnia nadał paczkę z butami z powrotem do sklepu przesyłką zwrotną (RS2). Przesyłka dotarła do sklepu 22 lutego 2026.
+
+Klient oczekuje zwrotu pełnej kwoty 349,00 zł na kartę.

@@ -11,6 +11,13 @@ import subprocess
 import sys
 from dataclasses import replace
 
+# Load .env from project root (silently ignored if file doesn't exist)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent / ".env")
+except ImportError:
+    pass
+
 import psycopg2
 from rich.console import Console
 from rich.table import Table
@@ -1179,6 +1186,175 @@ def cmd_reset_state(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# llm-prompt
+# ---------------------------------------------------------------------------
+
+def cmd_llm_prompt(args: argparse.Namespace) -> None:
+    """
+    Podgląd promptu wysyłanego do Gemini bez wywoływania API.
+
+    Tryby:
+      pn3 llm-prompt                  — pokaż system prompt (z DB schemas)
+      pn3 llm-prompt --text "..."     — pokaż system + user message
+      pn3 llm-prompt --json-schema    — pokaż JSON Schema odpowiedzi
+      pn3 llm-prompt --raw            — surowy tekst bez Rich formatowania
+    """
+    from rich.panel import Panel
+    from rich.syntax import Syntax
+
+    from config import ProjectConfig
+    from db import DBSession
+    from nlp.llm_prompt import build_response_schema, build_system_prompt
+    from sv.schema import PREDICATE_POSITIONS
+
+    cfg = ProjectConfig.load()
+
+    with DBSession.connect() as session:
+        schemas = session.load_cluster_schemas()
+
+    system_prompt = build_system_prompt(schemas, PREDICATE_POSITIONS)
+
+    if args.raw:
+        print(system_prompt)
+        if args.text:
+            print("\n--- USER MESSAGE ---\n")
+            print(args.text)
+        if args.json_schema:
+            print("\n--- JSON SCHEMA ---\n")
+            print(json.dumps(build_response_schema(), indent=2, ensure_ascii=False))
+        return
+
+    # Rich output
+    console.print(Panel(
+        system_prompt,
+        title=f"[bold cyan]System Prompt[/bold cyan]  "
+              f"[dim](model: {cfg.extractor.gemini_model}, "
+              f"backend: {cfg.extractor.backend})[/dim]",
+        border_style="cyan",
+        expand=True,
+    ))
+
+    if args.text:
+        console.print()
+        console.print(Panel(
+            args.text,
+            title="[bold yellow]User Message[/bold yellow]",
+            border_style="yellow",
+            expand=True,
+        ))
+
+    if args.json_schema:
+        console.print()
+        schema_json = json.dumps(build_response_schema(), indent=2, ensure_ascii=False)
+        console.print(Panel(
+            Syntax(schema_json, "json", theme="monokai", word_wrap=True),
+            title="[bold green]Response JSON Schema[/bold green]",
+            border_style="green",
+            expand=True,
+        ))
+
+    console.print(
+        f"\n[dim]Schemas loaded: {len(schemas)} clusters | "
+        f"Predicates: {len(PREDICATE_POSITIONS)}[/dim]"
+    )
+
+
+# ---------------------------------------------------------------------------
+# ingest-text
+# ---------------------------------------------------------------------------
+
+def _ensure_case_exists(conn, case_id: str, source_id: str, title: str) -> None:
+    """Tworzy wpis w sources + cases jeśli nie istnieje."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM cases WHERE case_id = %s", (case_id,))
+        if cur.fetchone() is not None:
+            return
+        cur.execute(
+            """
+            INSERT INTO sources (source_id, title, source_type, source_rank)
+            VALUES (%s, %s, 'case_text', 10)
+            ON CONFLICT (source_id) DO NOTHING
+            """,
+            (source_id, title),
+        )
+        cur.execute(
+            """
+            INSERT INTO cases (case_id, source_id, title)
+            SELECT %s, id, %s FROM sources WHERE source_id = %s
+            ON CONFLICT (case_id) DO NOTHING
+            """,
+            (case_id, title, source_id),
+        )
+
+
+def cmd_ingest_text(args: argparse.Namespace) -> None:
+    """
+    Ekstrahuje fakty z tekstu i zapisuje do DB dla podanego case_id.
+
+    Tryby:
+      pn3 ingest-text TC-002 --text "Złożyłem zamówienie..."
+      pn3 ingest-text TC-002 --file text_cases/TC-002.txt
+      pn3 ingest-text TC-002 --file ... --create      # utwórz case jeśli nie istnieje
+      pn3 ingest-text TC-002 --file ... --dry-run     # pokaż wynik bez zapisu
+    """
+    from pathlib import Path
+
+    from config import ProjectConfig
+    from db import DBSession
+    from nlp import get_extractor
+
+    case_id: str = args.case_id
+
+    if args.file:
+        text = Path(args.file).read_text(encoding="utf-8").strip()
+    elif args.text:
+        text = args.text.strip()
+    else:
+        console.print("[bold red]Podaj --text lub --file.[/bold red]")
+        raise SystemExit(1)
+
+    if not text:
+        console.print("[bold red]Tekst jest pusty.[/bold red]")
+        raise SystemExit(1)
+
+    source_id = f"{case_id}-TEXT"
+    title = args.title or case_id
+    cfg = ProjectConfig.load()
+
+    # --backend nadpisuje konfigurację z pliku
+    if getattr(args, "backend", None):
+        from dataclasses import replace as dc_replace
+        cfg = dc_replace(cfg, extractor=dc_replace(cfg.extractor, backend=args.backend))
+
+    with DBSession.connect() as session:
+        schemas = session.load_cluster_schemas()
+
+        if args.create:
+            with session.conn.transaction():
+                _ensure_case_exists(session.conn, case_id, source_id, title)
+
+        console.print(
+            f"[dim]Ekstrakcja ({cfg.extractor.backend}) → {case_id}...[/dim]"
+        )
+        extractor = get_extractor(schemas, cfg)
+        result = extractor.extract(text, source_id=source_id)
+
+        if args.dry_run:
+            console.print(
+                f"[bold yellow]dry-run[/bold yellow] — wynik dla {case_id}:"
+            )
+            console.print(result.summary())
+            return
+
+        session.save_extraction_result(result, case_id=case_id, source_text=text)
+
+    console.print(
+        f"[bold green]ingest-text completed[/bold green]: {case_id}"
+    )
+    console.print(result.summary())
+
+
+# ---------------------------------------------------------------------------
 # run-case
 # ---------------------------------------------------------------------------
 
@@ -1411,6 +1587,203 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
 # main
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# explain
+# ---------------------------------------------------------------------------
+
+def _load_case_text_from_db(conn, case_id: str) -> str | None:
+    """Zwraca content z tabeli sources powiązany z case_id (lub None)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT s.content
+            FROM sources s
+            JOIN cases c ON c.source_id = s.id
+            WHERE c.case_id = %s
+            """,
+            (case_id,),
+        )
+        row = cur.fetchone()
+    return str(row[0]) if row and row[0] else None
+
+
+def _load_proof_run_from_db(conn, case_id: str, proof_id: str | None):
+    """
+    Ładuje ProofRun z DB dla podanego case_id.
+    Jeśli proof_id podane — ładuje konkretny; inaczej najnowszy.
+    Zwraca sv.proof.ProofRun lub None.
+    """
+    from sv.proof import ProofRun, ProofStep
+
+    with conn.cursor() as cur:
+        if proof_id:
+            cur.execute(
+                """
+                SELECT pr.id, pr.proof_id, pr.result, pr.proof_dag
+                FROM proof_runs pr
+                JOIN cases c ON c.id = pr.case_id
+                WHERE c.case_id = %s AND pr.proof_id = %s
+                """,
+                (case_id, proof_id),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT pr.id, pr.proof_id, pr.result, pr.proof_dag
+                FROM proof_runs pr
+                JOIN cases c ON c.id = pr.case_id
+                WHERE c.case_id = %s
+                ORDER BY pr.id DESC
+                LIMIT 1
+                """,
+                (case_id,),
+            )
+        run_row = cur.fetchone()
+
+    if run_row is None:
+        return None
+
+    run_id, run_proof_id, result, proof_dag_raw = run_row
+    dag = _coerce_json(proof_dag_raw)
+    if isinstance(dag, dict):
+        # Zachowaj atom jako klucz "atom" w każdym wpisie
+        dag_list = [{"atom": k, **v} for k, v in dag.items()] if dag else []
+    elif isinstance(dag, list):
+        dag_list = dag
+    else:
+        dag_list = []
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ps.step_order, ps.rule_id, ps.substitution, ps.used_fact_ids
+            FROM proof_steps ps
+            WHERE ps.run_id = %s
+            ORDER BY ps.step_order
+            """,
+            (run_id,),
+        )
+        step_rows = cur.fetchall()
+
+    steps = []
+    for step_order, rule_id, substitution, used_fact_ids in step_rows:
+        sub = _coerce_json(substitution) or {}
+        used = list(used_fact_ids) if used_fact_ids else []
+        steps.append(ProofStep(
+            step_order=int(step_order),
+            rule_id=rule_id,
+            rule_text="",
+            substitution=sub if isinstance(sub, dict) else {},
+            used_fact_ids=used,
+        ))
+
+    return ProofRun(
+        proof_id=str(run_proof_id),
+        result=str(result),
+        proof_dag=dag_list,
+        steps=steps,
+    )
+
+
+def cmd_explain(args: argparse.Namespace) -> None:
+    """
+    Wysyła dane sprawy do Gemini i wyświetla wyjaśnienie w języku naturalnym.
+
+    Tryby:
+      pn3 explain TC-001                      — wywołaj Gemini, wydrukuj odpowiedź
+      pn3 explain TC-001 --dry-run            — podgląd promptu (bez API)
+      pn3 explain TC-001 --proof-id UUID      — użyj konkretnego proof run
+      pn3 explain TC-001 --file text.txt      — fallback tekstu gdy nie ma w DB
+      pn3 explain TC-001 --output result.txt  — zapisz wyjaśnienie do pliku
+    """
+    from rich.panel import Panel
+
+    from config import ProjectConfig
+    from db import DBSession
+    from explainer import LLMExplainer
+
+    case_id: str = args.case_id
+    cfg = ProjectConfig.load()
+
+    with DBSession.connect() as session:
+        entities, facts, _rules, cluster_states = session.load_case(case_id)
+
+        case_text = _load_case_text_from_db(session.conn, case_id)
+        if not case_text and args.file:
+            case_text = Path(args.file).read_text(encoding="utf-8")
+        if not case_text:
+            console.print(
+                f"[yellow]Brak tekstu sprawy dla {case_id}.[/yellow] "
+                "Podaj --file lub najpierw uruchom ingest-text."
+            )
+            case_text = ""
+
+        proof_run = _load_proof_run_from_db(session.conn, case_id, args.proof_id)
+
+    if not facts:
+        console.print(f"[bold red]Brak faktów dla case {case_id}.[/bold red] Uruchom najpierw run-case.")
+        return
+
+    explainer = LLMExplainer(cfg.explainer)
+
+    if args.dry_run:
+        req = explainer.preview_request(
+            case_text=case_text,
+            facts=facts,
+            proof_run=proof_run,
+            cluster_states=cluster_states,
+            entities=entities,
+        )
+        if args.raw:
+            print("=== SYSTEM PROMPT ===")
+            print(req["system_prompt"])
+            print("\n=== USER MESSAGE ===")
+            print(req["user_message"])
+        else:
+            console.print(Panel(
+                req["system_prompt"],
+                title=f"[bold cyan]System Prompt[/bold cyan]  "
+                      f"[dim](model: {req['model']}, lang: {req['language']})[/dim]",
+                border_style="cyan",
+                expand=True,
+            ))
+            console.print()
+            console.print(Panel(
+                req["user_message"],
+                title="[bold yellow]User Message[/bold yellow]",
+                border_style="yellow",
+                expand=True,
+            ))
+            console.print(
+                f"\n[dim]Fakty: {len(facts)} | "
+                f"Klastry: {len(cluster_states)} | "
+                f"Proof: {'tak' if proof_run else 'brak'}[/dim]"
+            )
+        return
+
+    console.print(f"[dim]Generuję wyjaśnienie dla {case_id} ({cfg.explainer.gemini_model})...[/dim]")
+    explanation = explainer.explain(
+        case_text=case_text,
+        facts=facts,
+        proof_run=proof_run,
+        cluster_states=cluster_states,
+        entities=entities,
+    )
+
+    if args.output:
+        Path(args.output).write_text(explanation, encoding="utf-8")
+        console.print(f"[bold green]Zapisano:[/bold green] {args.output}")
+    elif args.raw:
+        print(explanation)
+    else:
+        console.print(Panel(
+            explanation,
+            title=f"[bold cyan]Wyjaśnienie: {case_id}[/bold cyan]",
+            border_style="cyan",
+            expand=True,
+        ))
+
+
 _COMMANDS = {
     "entity-types":  (cmd_entity_types,  "List entity type definitions"),
     "predicates":    (cmd_predicates,    "List predicate definitions with roles"),
@@ -1425,8 +1798,11 @@ _COMMANDS = {
     "proof-graph":   (cmd_proof_graph,   "Export one proof run as Graphviz diagram"),
     "network-graph": (cmd_network_graph, "Export full case network graph (entities/facts/clusters/edges)"),
     "reset-state":   (cmd_reset_state,   "Reset runtime artifacts (learned rules, inferred facts, proofs, traces)"),
+    "ingest-text":   (cmd_ingest_text,   "Extract facts from text and save to DB for a given case_id"),
     "run-case":      (cmd_run_case,      "Run full pipeline for one case_id and save results"),
     "learn-rules":   (cmd_learn_rules,   "Train NN proposer and persist extracted learned rules"),
+    "llm-prompt":    (cmd_llm_prompt,    "Preview LLM system prompt and JSON schema (no API call)"),
+    "explain":       (cmd_explain,       "Explain case results in natural language using Gemini"),
 }
 
 
@@ -1542,6 +1918,88 @@ def main() -> None:
                 "--dry-run",
                 action="store_true",
                 help="Train and extract, but do not save rules to DB.",
+            )
+        elif name == "ingest-text":
+            cmd_parser.add_argument("case_id", help="Case ID, np. TC-002")
+            group = cmd_parser.add_mutually_exclusive_group(required=True)
+            group.add_argument(
+                "--text",
+                metavar="TEXT",
+                help="Tekst sprawy (inline).",
+            )
+            group.add_argument(
+                "--file",
+                metavar="PATH",
+                help="Ścieżka do pliku .txt z tekstem sprawy.",
+            )
+            cmd_parser.add_argument(
+                "--title",
+                metavar="TITLE",
+                default=None,
+                help="Tytuł case'u (domyślnie: case_id).",
+            )
+            cmd_parser.add_argument(
+                "--create",
+                action="store_true",
+                help="Utwórz case w DB jeśli nie istnieje.",
+            )
+            cmd_parser.add_argument(
+                "--dry-run",
+                action="store_true",
+                help="Pokaż wynik ekstrakcji bez zapisu do DB.",
+            )
+            cmd_parser.add_argument(
+                "--backend",
+                choices=["regex", "llm"],
+                default=None,
+                help="Backend ekstrakcji: regex (domyślnie z config) lub llm (Gemini).",
+            )
+        elif name == "llm-prompt":
+            cmd_parser.add_argument(
+                "--text",
+                metavar="TEXT",
+                default=None,
+                help="Pokaż również user message dla podanego tekstu.",
+            )
+            cmd_parser.add_argument(
+                "--json-schema",
+                action="store_true",
+                help="Pokaż JSON Schema odpowiedzi Gemini.",
+            )
+            cmd_parser.add_argument(
+                "--raw",
+                action="store_true",
+                help="Wyjście jako czysty tekst (bez Rich formatowania).",
+            )
+        elif name == "explain":
+            cmd_parser.add_argument("case_id", help="Case ID, np. TC-001")
+            cmd_parser.add_argument(
+                "--proof-id",
+                default=None,
+                metavar="UUID",
+                help="Konkretny proof run ID (domyślnie: najnowszy dla case).",
+            )
+            cmd_parser.add_argument(
+                "--file",
+                default=None,
+                metavar="PATH",
+                help="Plik z tekstem sprawy (fallback gdy tekst nie jest w DB).",
+            )
+            cmd_parser.add_argument(
+                "--dry-run",
+                action="store_true",
+                help="Pokaż prompt bez wywoływania Gemini.",
+            )
+            cmd_parser.add_argument(
+                "--output",
+                default=None,
+                metavar="PATH",
+                help="Zapisz wyjaśnienie do pliku zamiast na ekran.",
+            )
+            cmd_parser.add_argument(
+                "--raw",
+                action="store_true",
+                help="Wyjście jako czysty tekst (bez Rich formatowania).",
             )
 
     args = parser.parse_args()

@@ -1,0 +1,3 @@
+Klient o koncie A1010 próbował złożyć zamówienie O1000 na smartfon (produkt fizyczny PROD10) w sklepie TelecomShop Sp. z o.o. dnia 25 lutego 2026. Zamówienie zostało złożone, jednak system sklepu zablokował przetwarzanie, ponieważ konto A1010 ma status BLOCKED ze względu na wcześniejszą nieuregulowaną należność.
+
+Sklep nie przyjął zamówienia O1000 i powiadomił klienta o blokadzie konta drogą mailową. Klient nie dokonał żadnej płatności. Dostawa nie nastąpiła.

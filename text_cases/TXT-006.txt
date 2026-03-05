@@ -1,0 +1,5 @@
+Konsumentka Katarzyna Zielińska złożyła zamówienie O600 na zestaw mebli ogrodowych (produkt fizyczny PROD6) w sklepie OgrodStyle Sp. z o.o. dnia 1 lutego 2026. Sklep przyjął zamówienie 1 lutego 2026. Klientka zapłaciła przelewem (PAY6) 1 200,00 zł dnia 2 lutego 2026.
+
+Meble dostarczono kurierem (DEL6) dnia 6 lutego 2026. Klientka złożyła oświadczenie o odstąpieniu od umowy (STMT6) dopiero 25 lutego 2026 — czyli 19 dni po dostawie, przekraczając ustawowy termin 14 dni.
+
+Sklep poinformował klientkę, że termin na odstąpienie upłynął 20 lutego 2026 i odmówił przyjęcia zwrotu. Klientka nie odesłała towaru.

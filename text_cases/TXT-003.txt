@@ -1,0 +1,5 @@
+Firma XYZ Sp. z o.o. (klient biznesowy) złożyła zamówienie O300 dnia 3 marca 2026 na 50 sztuk drukarek biurowych (produkt fizyczny PROD3). Sklep TechBiz Sp. z o.o. przyjął zamówienie w dniu 3 marca 2026. Klient dokonał płatności przelewem bankowym (PAY3) w kwocie 45 000,00 zł w dniu 4 marca 2026.
+
+Towar dostarczono do siedziby firmy (DEL3) dnia 8 marca 2026. Po kilku dniach testów firma stwierdziła, że drukarki nie spełniają wymagań i zażądała zwrotu, powołując się na prawo do odstąpienia od umowy.
+
+Sklep odmówił przyjęcia zwrotu, wskazując, że klient jest przedsiębiorcą, a umowa zawarta między przedsiębiorcami nie podlega konsumenckiemu prawu do odstąpienia. Klient nie złożył oświadczenia o odstąpieniu (brak STMT).

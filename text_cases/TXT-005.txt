@@ -1,0 +1,5 @@
+Klient Marek Wiśniewski (konsument) zamówił telewizor 55" (produkt fizyczny PROD5) w sklepie ElektroMax Sp. z o.o., składając zamówienie O500 dnia 15 stycznia 2026. Sklep przyjął zamówienie tego samego dnia. Klient zapłacił BLIKiem (PAY5) kwotę 2 799,00 zł w dniu 15 stycznia 2026.
+
+Telewizor dostarczono kurierem (DEL5) dnia 20 stycznia 2026. Po rozpakowaniu klient stwiedził, że ekran ma martwą strefę w prawym dolnym rogu — produkt jest wadliwy.
+
+Dnia 22 stycznia 2026 klient złożył reklamację C501 (complaint) z tytułu rękojmi, opisując wady i dołączając zdjęcia. Sklep otrzymał reklamację tego samego dnia. Klient zażądał wymiany towaru na wolny od wad lub obniżenia ceny.

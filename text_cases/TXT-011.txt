@@ -1,0 +1,5 @@
+Konsument Robert Kowalski złożył zamówienie O1100 na zestaw garnków (produkt fizyczny PROD11) w sklepie DomArt Sp. z o.o. dnia 1 marca 2026. Sklep przyjął zamówienie tego samego dnia. Klient wybrał płatność za pobraniem (COD) i opłacił zamówienie kurierowi przy odbiorze kwotą 599,00 zł — płatność PAY11 zrealizowana 5 marca 2026, w dniu dostawy DEL11.
+
+Po otrzymaniu przesyłki klient stwierdził, że zestaw jest niekompletny (brakuje pokrywki). Złożył reklamację C1101 dnia 6 marca 2026. Sklep odpowiedział w dniu 10 marca 2026, uznając reklamację i zobowiązując się do przesłania brakującej pokrywki lub obniżenia ceny o 50,00 zł.
+
+Klient złożył oświadczenie o odstąpieniu od umowy (STMT11) dnia 12 marca 2026, czyli 7 dni po dostawie, i odesłał cały zestaw przesyłką zwrotną RS11 tego samego dnia.

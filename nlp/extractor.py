@@ -113,8 +113,8 @@ class TextExtractor:
         # 6. Klastry
         cluster_states = self._extract_cluster_states(text, entity_pos)
 
-        # Dodaj syntetyczne encje wygenerowane przez fakty
-        entities = self._add_synthetic_entities(entities, facts, source_id)
+        # Dodaj syntetyczne encje wygenerowane przez fakty i klastry
+        entities = self._add_synthetic_entities(entities, facts, cluster_states, source_id)
 
         return ExtractionResult(
             entities=entities,
@@ -230,38 +230,43 @@ class TextExtractor:
         self,
         entities: list[Entity],
         facts: list[Fact],
+        cluster_states: list,
         source_id: str,
     ) -> list[Entity]:
         """
-        Dodaje encje syntetyczne (DEL_*, STMT_*, RET_*) wygenerowane przez fakty.
+        Dodaje encje syntetyczne (DEL_*, STMT_*, RET_*, PAY_*, PROD_*)
+        wygenerowane przez fakty i cluster_states.
         """
+        _PREFIXES = ("DEL_", "STMT_", "RET_", "PAY_", "PROD_")
         seen = {e.entity_id for e in entities}
+
+        def _add(eid: str, ref_id: str) -> None:
+            if eid in seen or not any(eid.startswith(p) for p in _PREFIXES):
+                return
+            etype = (
+                "DELIVERY" if eid.startswith("DEL_") else
+                "STATEMENT" if eid.startswith("STMT_") else
+                "RETURN_SHIPMENT" if eid.startswith("RET_") else
+                "PAYMENT" if eid.startswith("PAY_") else
+                "PRODUCT"
+            )
+            entities.append(Entity(
+                entity_id=eid,
+                type=etype,
+                canonical_name=eid,
+                created_at=self._stable_timestamp(
+                    source_id, "synthetic_entity", etype, eid, ref_id,
+                ),
+            ))
+            seen.add(eid)
 
         for fact in facts:
             for arg in fact.args:
-                if arg.entity_id and arg.entity_id not in seen:
-                    eid = arg.entity_id
-                    if any(eid.startswith(p) for p in ("DEL_", "STMT_", "RET_", "PAY_", "PROD_")):
-                        etype = (
-                            "DELIVERY" if eid.startswith("DEL_") else
-                            "STATEMENT" if eid.startswith("STMT_") else
-                            "RETURN_SHIPMENT" if eid.startswith("RET_") else
-                            "PAYMENT" if eid.startswith("PAY_") else
-                            "PRODUCT"
-                        )
-                        entities.append(Entity(
-                            entity_id=eid,
-                            type=etype,
-                            canonical_name=eid,
-                            created_at=self._stable_timestamp(
-                                source_id,
-                                "synthetic_entity",
-                                etype,
-                                eid,
-                                fact.fact_id,
-                            ),
-                        ))
-                        seen.add(eid)
+                if arg.entity_id:
+                    _add(arg.entity_id, fact.fact_id)
+
+        for cs in cluster_states:
+            _add(cs.entity_id, cs.cluster_name)
 
         return entities
 

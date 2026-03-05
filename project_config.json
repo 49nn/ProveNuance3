@@ -1,0 +1,14 @@
+{
+  "extractor": {
+    "backend": "regex",
+    "gemini_model": "gemini-2.5-flash",
+    "temperature": 0.0,
+    "max_retries": 2,
+    "sv_verification": true,
+    "api_key_env": "GEMINI_API_KEY"
+  },
+  "explainer": {
+    "grounded" : true
+  },
+  "year": 2026
+}

@@ -1,0 +1,3 @@
+Klient Piotr Kaczmarek (konsument) złożył zamówienie O900 na rower górski (produkt fizyczny PROD9) w sklepie SportWorld Sp. z o.o. dnia 20 lutego 2026. Sklep przyjął zamówienie tego samego dnia. Klient opłacił zamówienie BLIKiem (PAY9) kwotą 1 899,00 zł dnia 20 lutego 2026.
+
+Dnia 21 lutego 2026 klient skontaktował się ze sklepem i anulował zamówienie O900, zanim towar został wysłany. Sklep potwierdził anulowanie i nie zrealizował dostawy. Zwrot płatności PAY9 w pełnej kwocie 1 899,00 zł nastąpił w dniu 22 lutego 2026.
