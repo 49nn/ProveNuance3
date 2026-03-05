@@ -1037,6 +1037,73 @@ def cmd_network_graph(args: argparse.Namespace) -> None:
 # reset-state
 # ---------------------------------------------------------------------------
 
+def _collect_ontology_counts(conn) -> dict[str, int]:
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM entity_types")
+        entity_types = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM predicate_definitions")
+        predicates = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM cluster_definitions")
+        clusters = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM rules WHERE learned = FALSE")
+        rules = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM rule_modules")
+        modules = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM entities")
+        entities = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM facts")
+        facts = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM cases")
+        cases = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM sources")
+        sources = int(cur.fetchone()[0])
+    return {
+        "entity_types": entity_types,
+        "predicates": predicates,
+        "clusters": clusters,
+        "rules_static": rules,
+        "rule_modules": modules,
+        "entities": entities,
+        "facts": facts,
+        "cases": cases,
+        "sources": sources,
+    }
+
+
+def _apply_ontology_reset(conn) -> dict[str, int]:
+    """
+    Pełne wyczyszczenie DB: wszystkie dane + ontologia.
+    Kolejność uwzględnia FK (bez ON DELETE CASCADE).
+    """
+    result: dict[str, int] = {}
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM fact_neural_trace")
+        result["fact_neural_trace"] = cur.rowcount
+        cur.execute("DELETE FROM facts")
+        result["facts"] = cur.rowcount
+        cur.execute("DELETE FROM cluster_states")
+        result["cluster_states"] = cur.rowcount
+        cur.execute("DELETE FROM entities")
+        result["entities"] = cur.rowcount
+        cur.execute("DELETE FROM proof_runs")        # cascades proof_steps
+        result["proof_runs"] = cur.rowcount
+        cur.execute("DELETE FROM cases")             # cascades case_queries
+        result["cases"] = cur.rowcount
+        cur.execute("DELETE FROM sources")
+        result["sources"] = cur.rowcount
+        cur.execute("DELETE FROM cluster_definitions")   # cascades cluster_domain_values
+        result["cluster_definitions"] = cur.rowcount
+        cur.execute("DELETE FROM predicate_definitions") # cascades predicate_roles
+        result["predicate_definitions"] = cur.rowcount
+        cur.execute("DELETE FROM entity_types")
+        result["entity_types"] = cur.rowcount
+        cur.execute("DELETE FROM rules")
+        result["rules"] = cur.rowcount
+        cur.execute("DELETE FROM rule_modules")
+        result["rule_modules"] = cur.rowcount
+    return result
+
+
 def _collect_reset_counts(
     conn, prune_cluster_states: bool, case_id: str | None = None
 ) -> dict[str, int]:
@@ -1303,28 +1370,47 @@ def _apply_reset(
 def cmd_reset_state(args: argparse.Namespace) -> None:
     prune_cluster_states = not args.keep_cluster_states
     case_id: str | None = getattr(args, "case_id", None) or None
+    reset_ontology: bool = getattr(args, "ontology", False)
+
+    if reset_ontology and case_id:
+        console.print("[bold red]--ontology nie może być używane razem z --case-id.[/bold red]")
+        raise SystemExit(1)
 
     with connect() as conn:
-        counts = _collect_reset_counts(
-            conn, prune_cluster_states=prune_cluster_states, case_id=case_id
-        )
-
         scope = f"[bold yellow]{case_id}[/bold yellow]" if case_id else "[bold yellow]ALL[/bold yellow]"
-        console.print(f"[bold cyan]Reset Preview[/bold cyan]  scope={scope}")
-        if case_id:
-            console.print("[dim]Learned rules are global — skipped for per-case reset.[/dim]")
+
+        if reset_ontology:
+            onto_counts = _collect_ontology_counts(conn)
+            console.print(f"[bold red]Reset Preview[/bold red]  scope={scope}  [bold red]+ ONTOLOGIA (PEŁNY WIPE)[/bold red]")
+            console.print("[dim]Usuwa CAŁĄ ontologię + wszystkie dane (entities, facts, cases, sources).[/dim]")
+            console.print(f"entity_types: {onto_counts['entity_types']}")
+            console.print(f"predicates:   {onto_counts['predicates']}")
+            console.print(f"clusters:     {onto_counts['clusters']}")
+            console.print(f"rules(static):{onto_counts['rules_static']}")
+            console.print(f"rule_modules: {onto_counts['rule_modules']}")
+            console.print(f"entities:     {onto_counts['entities']}")
+            console.print(f"facts:        {onto_counts['facts']}")
+            console.print(f"cases:        {onto_counts['cases']}")
+            console.print(f"sources:      {onto_counts['sources']}")
         else:
-            console.print(f"learned_rules: {counts['learned_rules']}")
-        console.print(f"proof_runs: {counts['proof_runs']}")
-        console.print(f"proof_steps: {counts['proof_steps']}")
-        console.print(f"facts_non_observed: {counts['non_observed_facts']}")
-        console.print(f"fact_neural_trace: {counts['neural_traces']}")
-        console.print(f"facts_with_proof_link: {counts['facts_with_proof']}")
-        console.print(f"observed_facts_truth_reset: {counts['observed_needing_truth_reset']}")
-        if prune_cluster_states:
-            console.print(f"cluster_states_non_clamped: {counts['prunable_cluster_states']}")
-        else:
-            console.print("cluster_states_non_clamped: [dim]kept[/dim]")
+            counts = _collect_reset_counts(
+                conn, prune_cluster_states=prune_cluster_states, case_id=case_id
+            )
+            console.print(f"[bold cyan]Reset Preview[/bold cyan]  scope={scope}")
+            if case_id:
+                console.print("[dim]Learned rules are global — skipped for per-case reset.[/dim]")
+            else:
+                console.print(f"learned_rules: {counts['learned_rules']}")
+            console.print(f"proof_runs: {counts['proof_runs']}")
+            console.print(f"proof_steps: {counts['proof_steps']}")
+            console.print(f"facts_non_observed: {counts['non_observed_facts']}")
+            console.print(f"fact_neural_trace: {counts['neural_traces']}")
+            console.print(f"facts_with_proof_link: {counts['facts_with_proof']}")
+            console.print(f"observed_facts_truth_reset: {counts['observed_needing_truth_reset']}")
+            if prune_cluster_states:
+                console.print(f"cluster_states_non_clamped: {counts['prunable_cluster_states']}")
+            else:
+                console.print("cluster_states_non_clamped: [dim]kept[/dim]")
 
         if not args.yes:
             console.print()
@@ -1332,25 +1418,41 @@ def cmd_reset_state(args: argparse.Namespace) -> None:
             return
 
         try:
-            applied = _apply_reset(
-                conn, prune_cluster_states=prune_cluster_states, case_id=case_id
-            )
-            conn.commit()
+            if reset_ontology:
+                applied_onto = _apply_ontology_reset(conn)
+                conn.commit()
+            else:
+                applied = _apply_reset(
+                    conn, prune_cluster_states=prune_cluster_states, case_id=case_id
+                )
+                conn.commit()
         except Exception:
             conn.rollback()
             raise
 
     console.print()
-    console.print("[bold green]Reset Applied[/bold green]")
-    if not case_id:
-        console.print(f"deleted learned rules: {applied['deleted_learned_rules']}")
-    console.print(f"deleted proof runs: {applied['deleted_proof_runs']}")
-    console.print(f"deleted neural traces: {applied['deleted_neural_traces']}")
-    console.print(f"deleted non-observed facts: {applied['deleted_non_observed_facts']}")
-    console.print(f"reset observed facts (proof/truth): {applied['reset_observed_facts']}")
-    console.print(f"deleted non-clamped cluster_states: {applied['deleted_non_clamped_cluster_states']}")
-    if not case_id:
-        console.print(f"deleted empty learned modules: {applied['deleted_empty_learned_modules']}")
+    if reset_ontology:
+        console.print("[bold green]Ontology Reset Applied[/bold green]")
+        console.print(f"deleted entity_types: {applied_onto['entity_types']}")
+        console.print(f"deleted predicates:   {applied_onto['predicate_definitions']}")
+        console.print(f"deleted clusters:     {applied_onto['cluster_definitions']}")
+        console.print(f"deleted rules:        {applied_onto['rules']}")
+        console.print(f"deleted rule_modules: {applied_onto['rule_modules']}")
+        console.print(f"deleted entities:     {applied_onto['entities']}")
+        console.print(f"deleted facts:        {applied_onto['facts']}")
+        console.print(f"deleted cases:        {applied_onto['cases']}")
+        console.print(f"deleted sources:      {applied_onto['sources']}")
+    else:
+        console.print("[bold green]Reset Applied[/bold green]")
+        if not case_id:
+            console.print(f"deleted learned rules: {applied['deleted_learned_rules']}")
+        console.print(f"deleted proof runs: {applied['deleted_proof_runs']}")
+        console.print(f"deleted neural traces: {applied['deleted_neural_traces']}")
+        console.print(f"deleted non-observed facts: {applied['deleted_non_observed_facts']}")
+        console.print(f"reset observed facts (proof/truth): {applied['reset_observed_facts']}")
+        console.print(f"deleted non-clamped cluster_states: {applied['deleted_non_clamped_cluster_states']}")
+        if not case_id:
+            console.print(f"deleted empty learned modules: {applied['deleted_empty_learned_modules']}")
 
 
 # ---------------------------------------------------------------------------
@@ -2040,6 +2142,194 @@ def cmd_explain(args: argparse.Namespace) -> None:
             expand=True,
         ))
 
+# ---------------------------------------------------------------------------
+# gen-ontology
+# ---------------------------------------------------------------------------
+
+def cmd_gen_ontology(args: argparse.Namespace) -> None:
+    """
+    Generuje ontologię z tekstu regulaminu przez Gemini i ładuje do DB.
+
+    Tryby:
+      pn3 gen-ontology --file regulamin.txt [--source-id REG-001] [--dry-run] [--raw]
+      pn3 gen-ontology --text "§1. ..."
+    """
+    import json as _json
+    from pathlib import Path as _Path
+    from rich.panel import Panel
+    from rich.syntax import Syntax
+    from rich.table import Table as RichTable
+
+    from config import ProjectConfig
+    from db import DBSession
+    from nlp.ontology_builder import (
+        build_ontology_prompt,
+        build_ontology_schema,
+        parse_ontology_response,
+    )
+
+    if args.file:
+        text = _Path(args.file).read_text(encoding="utf-8").strip()
+    elif args.text:
+        text = args.text.strip()
+    else:
+        console.print("[bold red]Podaj --text lub --file.[/bold red]")
+        raise SystemExit(1)
+
+    if not text:
+        console.print("[bold red]Tekst jest pusty.[/bold red]")
+        raise SystemExit(1)
+
+    source_id: str = args.source_id or "regulation"
+    cfg = ProjectConfig.load()
+
+    _api_key = os.environ.get(cfg.extractor.api_key_env, "")
+    if not _api_key:
+        console.print(
+            f"[bold red]Brak klucza API Gemini.[/bold red] "
+            f"Ustaw zmienną środowiskową: {cfg.extractor.api_key_env}"
+        )
+        raise SystemExit(1)
+
+    _key_hint = f"…{_api_key[-4:]}"
+    console.print(
+        f"[dim]gen-ontology (model={cfg.extractor.gemini_model}, key={_key_hint}) "
+        f"source_id={source_id}...[/dim]"
+    )
+
+    # Wywołaj Gemini
+    try:
+        from google import genai
+    except ImportError:
+        console.print(
+            "[bold red]Brak pakietu google-genai.[/bold red] "
+            "Zainstaluj: pip install google-genai"
+        )
+        raise SystemExit(1)
+
+    client = genai.Client(api_key=_api_key)
+    prompt = build_ontology_prompt(text)
+    schema = build_ontology_schema()
+
+    response = client.models.generate_content(
+        model=cfg.extractor.gemini_model,
+        contents=prompt,
+        config={
+            "temperature": 0.0,
+            "response_mime_type": "application/json",
+            "response_schema": schema,
+        },
+    )
+    raw: dict = _json.loads(response.text)
+
+    if args.raw:
+        print(_json.dumps(raw, indent=2, ensure_ascii=False))
+        if args.dry_run:
+            return
+
+    result = parse_ontology_response(raw, source_id)
+
+    if args.dry_run:
+        console.print(
+            f"[bold yellow]dry-run[/bold yellow] — {result.summary()}"
+        )
+        _print_ontology_tables(result)
+        return
+
+    with DBSession.connect() as session:
+        session.save_ontology(result)
+
+    console.print(f"[bold green]gen-ontology completed[/bold green]: {result.summary()}")
+    _print_ontology_tables(result)
+
+
+def _print_ontology_tables(result) -> None:
+    from rich.table import Table as RichTable
+
+    if result.entity_types:
+        t = RichTable(title="Entity Types", header_style="bold cyan", show_lines=False)
+        t.add_column("name", style="bold yellow", no_wrap=True)
+        t.add_column("source_span", style="dim")
+        for et in result.entity_types:
+            t.add_row(et.name, (et.source_span_text or "")[:80])
+        console.print(t)
+
+    if result.predicates:
+        t = RichTable(title="Predicates", header_style="bold cyan", show_lines=False)
+        t.add_column("name", style="bold yellow", no_wrap=True)
+        t.add_column("roles", style="cyan")
+        t.add_column("source_span", style="dim")
+        for pred in result.predicates:
+            roles_str = ", ".join(
+                f"{r.position}:{r.role}({'?' if r.entity_type is None else r.entity_type})"
+                for r in pred.roles
+            )
+            t.add_row(pred.name, roles_str, (pred.source_span_text or "")[:60])
+        console.print(t)
+
+    if result.clusters:
+        t = RichTable(title="Clusters", header_style="bold cyan", show_lines=False)
+        t.add_column("name", style="bold yellow", no_wrap=True)
+        t.add_column("entity_type", style="cyan", no_wrap=True)
+        t.add_column("domain")
+        t.add_column("source_span", style="dim")
+        for cl in result.clusters:
+            t.add_row(
+                cl.name, cl.entity_type,
+                " | ".join(cl.domain),
+                (cl.source_span_text or "")[:60],
+            )
+        console.print(t)
+
+    if result.rules:
+        t = RichTable(title="Rules", header_style="bold cyan", show_lines=False)
+        t.add_column("rule_id", style="bold yellow", no_wrap=True)
+        t.add_column("module", style="cyan", no_wrap=True)
+        t.add_column("stratum", justify="right", style="dim")
+        t.add_column("clingo_text")
+        for rule in result.rules:
+            t.add_row(
+                rule.rule_id, rule.module, str(rule.stratum),
+                rule.clingo_text[:80],
+            )
+        console.print(t)
+
+
+def cmd_eval(args: argparse.Namespace) -> None:
+    """
+    Run evaluation pipeline and save JSON/CSV reports.
+    Wraps eval/run_eval.py to keep a single CLI entrypoint.
+    """
+    script_path = Path(__file__).resolve().parent.parent / "eval" / "run_eval.py"
+    if not script_path.exists():
+        console.print(f"[bold red]Evaluation script not found:[/bold red] {script_path}")
+        raise SystemExit(1)
+
+    cmd: list[str] = [
+        sys.executable,
+        str(script_path),
+        "--replay",
+        str(args.replay),
+        "--output-json",
+        args.output_json,
+    ]
+    if args.output_csv:
+        cmd.extend(["--output-csv", args.output_csv])
+    if args.include_details:
+        cmd.append("--include-details")
+    if args.case:
+        for case_id in args.case:
+            cmd.extend(["--case", case_id])
+
+    console.print(f"[dim]Running eval: {' '.join(cmd)}[/dim]")
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.stdout:
+        print(proc.stdout, end="" if proc.stdout.endswith("\n") else "\n")
+    if proc.returncode != 0:
+        if proc.stderr:
+            print(proc.stderr, end="" if proc.stderr.endswith("\n") else "\n", file=sys.stderr)
+        raise SystemExit(proc.returncode)
+
 
 _COMMANDS = {
     "entity-types":  (cmd_entity_types,  "List entity type definitions"),
@@ -2055,10 +2345,12 @@ _COMMANDS = {
     "proof-graph":   (cmd_proof_graph,   "Export one proof run as Graphviz diagram"),
     "network-graph": (cmd_network_graph, "Export full case network graph (entities/facts/clusters/edges)"),
     "reset-state":   (cmd_reset_state,   "Reset runtime artifacts (learned rules, inferred facts, proofs, traces)"),
+    "gen-ontology":  (cmd_gen_ontology,  "Generate ontology from regulatory text using LLM and save to DB"),
     "ingest-text":   (cmd_ingest_text,   "Extract facts from text and save to DB for a given case_id"),
     "ingest-folder": (cmd_ingest_folder, "Extract facts from all .txt files in a folder (case_id = filename)"),
     "run-case":      (cmd_run_case,      "Run full pipeline for one case_id and save results"),
     "learn-rules":   (cmd_learn_rules,   "Train NN proposer and persist extracted learned rules"),
+    "eval":          (cmd_eval,          "Run evaluation metrics and save JSON/CSV report"),
     "llm-prompt":    (cmd_llm_prompt,    "Preview LLM system prompt and JSON schema (no API call)"),
     "explain":       (cmd_explain,       "Explain case results in natural language using Gemini"),
 }
@@ -2138,6 +2430,16 @@ def main() -> None:
                 metavar="CASE_ID",
                 help="Limit reset to a single case (e.g. TC-010). Learned rules are never deleted in per-case mode.",
             )
+            cmd_parser.add_argument(
+                "--ontology",
+                action="store_true",
+                help=(
+                    "FULL wipe: usuwa całą ontologię (entity_types, predicates, clusters, rules) "
+                    "oraz wszystkie zależne dane (entities, facts, cases, sources). "
+                    "Używaj po gen-ontology gdy chcesz przeładować regulamin od zera. "
+                    "Niezgodne z --case-id."
+                ),
+            )
         elif name == "learn-rules":
             cmd_parser.add_argument(
                 "--case",
@@ -2182,6 +2484,63 @@ def main() -> None:
                 "--dry-run",
                 action="store_true",
                 help="Train and extract, but do not save rules to DB.",
+            )
+        elif name == "eval":
+            cmd_parser.add_argument(
+                "--case",
+                action="append",
+                help="Case ID to evaluate (repeatable). Default: all cases.",
+            )
+            cmd_parser.add_argument(
+                "--replay",
+                type=int,
+                default=1,
+                help="How many times to replay each case for stability check (default: 1).",
+            )
+            cmd_parser.add_argument(
+                "--output-json",
+                default="eval_report.json",
+                metavar="PATH",
+                help="Output JSON report path (default: eval_report.json).",
+            )
+            cmd_parser.add_argument(
+                "--output-csv",
+                default=None,
+                metavar="PATH",
+                help="Optional CSV path with per-query details.",
+            )
+            cmd_parser.add_argument(
+                "--include-details",
+                action="store_true",
+                help="Include per-query details in JSON output.",
+            )
+        elif name == "gen-ontology":
+            group = cmd_parser.add_mutually_exclusive_group(required=True)
+            group.add_argument(
+                "--file",
+                metavar="PATH",
+                help="Ścieżka do pliku .txt z tekstem regulaminu.",
+            )
+            group.add_argument(
+                "--text",
+                metavar="TEXT",
+                help="Tekst regulaminu (inline).",
+            )
+            cmd_parser.add_argument(
+                "--source-id",
+                metavar="ID",
+                default=None,
+                help="Identyfikator regulaminu w DB (domyślnie: 'regulation').",
+            )
+            cmd_parser.add_argument(
+                "--dry-run",
+                action="store_true",
+                help="Pokaż wynik bez zapisu do DB.",
+            )
+            cmd_parser.add_argument(
+                "--raw",
+                action="store_true",
+                help="Wydrukuj surowy JSON z Gemini.",
             )
         elif name == "ingest-text":
             cmd_parser.add_argument("case_id", help="Case ID, np. TC-002")

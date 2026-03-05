@@ -1,23 +1,19 @@
 """
-ProposeVerifyRunner — fasada łącząca NeuralInference → SymbolicVerifier.
+ProposeVerifyRunner - facade connecting NeuralInference to SymbolicVerifier.
 
-Workflow (jeden przebieg):
-  1. NeuralInference.propose()  → nn_facts (inferred_candidate), nn_states
-  2. SymbolicVerifier.verify()  → proved facts, new facts, proof DAG
-  3. Złożenie PipelineResult
-
-Typowe użycie:
-    runner = ProposeVerifyRunner.from_schemas(cluster_schemas)
-    result = runner.run(entities, facts, rules, cluster_states)
-
-Użycie z istniejącymi komponentami:
-    runner = ProposeVerifyRunner(nn_inference, verifier)
-    result = runner.run(entities, facts, rules, cluster_states)
+Workflow (single run):
+  1. NeuralInference.propose()  -> nn_facts (inferred_candidate), nn_states
+  2. SymbolicVerifier.verify()  -> proved facts, new facts, proof DAG
+  3. Merge into PipelineResult
 """
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import torch
+
+from data_model.common import ConstTerm
+from data_model.rule import LiteralType
 from nn.config import NNConfig
 from nn.entity_memory import EntityMemoryBiasEncoder
 from nn.gating import ExceptionGateBank
@@ -37,11 +33,11 @@ if TYPE_CHECKING:
 
 class ProposeVerifyRunner:
     """
-    Fasada propose-verify: jeden przebieg NN → SV.
+    Propose-verify facade: one neural pass followed by symbolic verification.
 
-    Parametry:
-        nn_inference:  skonstruowany NeuralInference (z gotowym NeuralProposer)
-        verifier:      skonstruowany SymbolicVerifier
+    Args:
+        nn_inference: constructed NeuralInference (with ready NeuralProposer)
+        verifier: constructed SymbolicVerifier
     """
 
     def __init__(
@@ -52,10 +48,6 @@ class ProposeVerifyRunner:
         self.nn_inference = nn_inference
         self.verifier = verifier
 
-    # ------------------------------------------------------------------
-    # Fabryka
-    # ------------------------------------------------------------------
-
     @classmethod
     def from_schemas(
         cls,
@@ -63,19 +55,19 @@ class ProposeVerifyRunner:
         config: NNConfig | None = None,
     ) -> ProposeVerifyRunner:
         """
-        Buduje runner z definicji klastrów (bez danych).
+        Build runner from cluster schemas (without case data).
 
-        Wagi NeuralProposer są zainicjalizowane losowo (Xavier dla W+,
-        zeros dla W-, zeros dla biasów). Przed trenowaniem dają słabe
-        propozycje — to normalne; SV i tak filtruje przez reguły.
+        Default edge specs include:
+          - role_of:  c_* -> fact
+          - implies:  c_src -> c_dst (same entity_type)
+          - supports: fact -> c_*
 
-        edge_type_specs: jeden 'role_of' per klaster (klaster→fakt).
-        Reguły klaster→klaster (learned=True) są pomijane — gdy będą
-        potrzebne, należy przekazać gotowy runner z własnymi specs.
+        This lets default run-case path use learned relation edges
+        without custom runner wiring.
         """
         config = config or NNConfig()
 
-        edge_type_specs: list[EdgeTypeSpec] = [
+        role_specs: list[EdgeTypeSpec] = [
             EdgeTypeSpec(
                 src_type=f"c_{s.name}",
                 relation="role_of",
@@ -85,6 +77,32 @@ class ProposeVerifyRunner:
             )
             for s in cluster_schemas
         ]
+
+        implies_specs: list[EdgeTypeSpec] = [
+            EdgeTypeSpec(
+                src_type=f"c_{src.name}",
+                relation="implies",
+                dst_type=f"c_{dst.name}",
+                src_dim=src.dim,
+                dst_dim=dst.dim,
+            )
+            for src in cluster_schemas
+            for dst in cluster_schemas
+            if src.name != dst.name and src.entity_type == dst.entity_type
+        ]
+
+        supports_specs: list[EdgeTypeSpec] = [
+            EdgeTypeSpec(
+                src_type="fact",
+                relation="supports",
+                dst_type=f"c_{dst.name}",
+                src_dim=GraphBuilder.FACT_DIM,
+                dst_dim=dst.dim,
+            )
+            for dst in cluster_schemas
+        ]
+
+        edge_type_specs = role_specs + implies_specs + supports_specs
 
         mp_bank = HeteroMessagePassingBank(edge_type_specs)
         gate_bank = ExceptionGateBank(gate_specs=[])
@@ -99,9 +117,100 @@ class ProposeVerifyRunner:
 
         return cls(nn_inference, verifier)
 
-    # ------------------------------------------------------------------
-    # Główna metoda
-    # ------------------------------------------------------------------
+    @staticmethod
+    def _const_value_in_domain(
+        rule_args,
+        domain: list[str],
+    ) -> str | None:
+        """
+        Return first ConstTerm value that belongs to cluster domain.
+        Domain matching is case-insensitive; return value is normalized to upper-case.
+        """
+        domain_set = {v.upper() for v in domain}
+        for arg in rule_args:
+            term = arg.term
+            if isinstance(term, ConstTerm):
+                value = term.const.upper()
+                if value in domain_set:
+                    return value
+        return None
+
+    def _apply_learned_rule_weights(self, rules: list[Rule]) -> None:
+        """
+        Seed message-passing matrices for learned relation edges from rule metadata.weight.
+
+        Scope:
+          - relation='implies' (cluster -> cluster)
+          - relation='supports' (fact -> cluster, truth row = 'T')
+
+        Strategy:
+          1. Reset implies/supports modules to neutral effective matrix.
+          2. Fill positive entries from learned rules.
+        """
+        mp_bank = self.nn_inference.proposer.mp_bank
+        schemas = self.nn_inference.graph_builder.cluster_schemas
+        schema_by_name = {s.name: s for s in schemas}
+
+        module_by_key = {
+            (spec.src_type, spec.relation, spec.dst_type): mp_bank.get_module(spec)
+            for spec in mp_bank.specs
+        }
+
+        truth_domain = tuple(self.nn_inference.proposer.config.truth_domain)
+        truth_t_idx = truth_domain.index("T") if "T" in truth_domain else 0
+        neutral_neg_raw = -20.0  # softplus(-20) ~= 0
+
+        with torch.no_grad():
+            # 1) Neutralize implies/supports matrices each run to avoid drift across cases.
+            for spec in mp_bank.specs:
+                if spec.relation not in {"implies", "supports"}:
+                    continue
+                module = mp_bank.get_module(spec)
+                module.W_pos.zero_()
+                module.W_neg_raw.fill_(neutral_neg_raw)
+
+            # 2) Inject learned weights from rule table.
+            for rule in rules:
+                if not rule.metadata.learned:
+                    continue
+
+                weight = float(rule.metadata.weight or 0.0)
+                if weight <= 0.0:
+                    continue
+
+                dst_schema = schema_by_name.get(rule.head.predicate)
+                if dst_schema is None:
+                    continue
+
+                dst_value = self._const_value_in_domain(rule.head.args, dst_schema.domain)
+                if dst_value is None:
+                    continue
+                dst_idx = dst_schema.domain.index(dst_value)
+
+                for lit in rule.body:
+                    if lit.literal_type != LiteralType.pos:
+                        continue
+
+                    src_schema = schema_by_name.get(lit.predicate)
+                    if src_schema is not None:
+                        src_value = self._const_value_in_domain(lit.args, src_schema.domain)
+                        if src_value is None:
+                            continue
+                        src_idx = src_schema.domain.index(src_value)
+                        module = module_by_key.get(
+                            (f"c_{src_schema.name}", "implies", f"c_{dst_schema.name}")
+                        )
+                        if module is None:
+                            continue
+                        current = float(module.W_pos[src_idx, dst_idx].item())
+                        module.W_pos[src_idx, dst_idx] = max(current, weight)
+                        continue
+
+                    module = module_by_key.get(("fact", "supports", f"c_{dst_schema.name}"))
+                    if module is None:
+                        continue
+                    current = float(module.W_pos[truth_t_idx, dst_idx].item())
+                    module.W_pos[truth_t_idx, dst_idx] = max(current, weight)
 
     def run(
         self,
@@ -111,21 +220,16 @@ class ProposeVerifyRunner:
         cluster_states: list[ClusterStateRow],
     ) -> PipelineResult:
         """
-        Wykonuje jeden przebieg propose-verify.
+        Execute one propose-verify pass.
 
-        1. NN propose: uzupełnia logity faktów i klastrów.
-           Fakty nieobserwowane dostają status inferred_candidate.
-        2. SV verify: dowodzi inferred_candidate przez reguły Horn+NAF.
-           Udowodnione → proved. Reguły produkują new_facts (np. CONTRACT_FORMED).
-        3. Składa PipelineResult.
-
-        Zwraca:
-            PipelineResult z facts = updated_facts + new_facts,
-            cluster_states = zaktualizowane logity z NN,
-            new_facts = fakty derywowane przez SV,
-            proof_nodes = proof DAG.
+        Returns:
+            PipelineResult with:
+              - facts = updated_facts + new_facts
+              - cluster_states = neural-updated states
+              - new_facts = symbolically derived facts
+              - proof_nodes = proof DAG
         """
-        # Odtwórz bank bramek z aktualnego zbioru reguł (learned defaults + ab_*).
+        # Rebuild gate bank from current rules (learned defaults + ab_*).
         cluster_type_dims = {
             cname: int(param.numel())
             for cname, param in self.nn_inference.proposer.cluster_biases.items()
@@ -136,16 +240,17 @@ class ProposeVerifyRunner:
             cluster_type_dims=cluster_type_dims,
             fact_dim=fact_dim,
         )
+        self._apply_learned_rule_weights(rules)
 
-        # Faza 1 — Neural
+        # Phase 1: neural propose
         nn_facts, nn_states = self.nn_inference.propose(
             entities, facts, rules, cluster_states
         )
 
-        # Faza 2 — Symbolic
+        # Phase 2: symbolic verify
         sv_result = self.verifier.verify(nn_facts, rules, nn_states)
 
-        # Scalenie: updated_facts (z nowymi statusami) + new_facts (derywowane)
+        # Merge: updated facts + newly derived facts
         all_facts = sv_result.updated_facts + sv_result.new_facts
 
         return PipelineResult(

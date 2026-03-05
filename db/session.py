@@ -18,12 +18,14 @@ from .connection import connect as connect_db
 from .entity_repo import link_or_upsert_entity, upsert_entity
 from .fact_repo import attach_proof_run_to_facts, upsert_fact
 from .proof_repo import save_proof_run
+from .ontology_repo import save_ontology as _save_ontology
 from .rule_repo import load_rules, upsert_learned_rules
 from .schema_repo import load_cluster_schemas
 
 if TYPE_CHECKING:
     from data_model.fact import Fact
     from data_model.rule import Rule
+    from nlp.ontology_builder import OntologyResult
     from nlp.result import ExtractionResult
     from pipeline.result import PipelineResult
 
@@ -46,6 +48,11 @@ class DBSession:
 
     def load_rules(self, enabled_only: bool = True) -> list["Rule"]:
         return load_rules(self.conn, enabled_only=enabled_only)
+
+    def save_ontology(self, result: "OntologyResult") -> None:
+        with self.conn.transaction():
+            _save_ontology(self.conn, result)
+        self.conn.commit()
 
     def save_learned_rules(
         self,

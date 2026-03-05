@@ -30,6 +30,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .extractor import TextExtractor
+from .ontology_builder import (
+    OntologyResult,
+    build_ontology_prompt,
+    build_ontology_schema,
+    clingo_to_head_body,
+    parse_ontology_response,
+)
 from .result import ExtractionResult
 
 if TYPE_CHECKING:
@@ -79,4 +86,9 @@ __all__ = [
     "LLMExtractor",
     "ExtractionResult",
     "get_extractor",
+    "OntologyResult",
+    "build_ontology_prompt",
+    "build_ontology_schema",
+    "parse_ontology_response",
+    "clingo_to_head_body",
 ]
