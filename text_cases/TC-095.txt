@@ -1,0 +1,5 @@
+Henryk Walczak (konsument) złożył zamówienie O195 dnia 1 marca 2026 na rower elektryczny (produkt fizyczny PROD195). Sklep EBike Sp. z o.o. przyjął zamówienie 1 marca 2026. Klient zapłacił kartą (PAY195) kwotę 5 500,00 zł.
+
+Towar dostarczono (DEL195) dnia 4 marca 2026. Klient złożył oświadczenie o odstąpieniu (STMT195) dnia 19 marca 2026 – 15 dni po dostawie. Ustawowy termin 14 dni upłynął 18 marca 2026.
+
+Sklep odmówił przyjęcia zwrotu – termin przekroczony o 1 dzień.

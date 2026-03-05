@@ -1,0 +1,5 @@
+Przedsiębiorstwo JKL Sp. z o.o. (klient biznesowy) złożyło zamówienie O141 dnia 12 lutego 2026 na licencję oprogramowania dla 50 stanowisk (produkt cyfrowy PROD141). Sklep BusinessSoft Sp. z o.o. przyjął zamówienie 12 lutego 2026. Klient zapłacił przelewem (PAY141) kwotę 25 000,00 zł.
+
+Sklep uzyskał zgodę klienta na natychmiastowe wykonanie umowy (digital_consent=YES). Klient aktywował licencje na 10 stanowiskach (download_started_flag=YES). Klient złożył oświadczenie o odstąpieniu (STMT141) dnia 15 lutego 2026.
+
+Sklep odmówił – umowa B2B wyklucza konsumenckie prawo do odstąpienia; aktywacja licencji nastąpiła.

@@ -1,0 +1,5 @@
+Firma GHI Sp. z o.o. (klient biznesowy) złożyła zamówienie O140 dnia 10 lutego 2026 na meble biurowe (produkt fizyczny PROD140). Sklep Office Furniture Sp. z o.o. przyjął zamówienie 10 lutego 2026. Klient zapłacił zaliczką 30% przelewem (PAY140a) – 4 500,00 zł dnia 11 lutego 2026.
+
+Reszta (10 500,00 zł) miała być płatna przy odbiorze. Towar dostarczono (DEL140) dnia 20 lutego 2026, ale klient odmówił zapłaty reszty, twierdząc że meble są inne niż zamówione (defective=YES).
+
+Sklep żąda zapłaty pozostałej kwoty lub zwrotu towaru.

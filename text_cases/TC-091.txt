@@ -1,0 +1,3 @@
+Justyna Kowalska (konsument) złożyła zamówienie O191 dnia 11 lutego 2026 na dostęp do platformy fitness online (produkt cyfrowy PROD191). Sklep FitOnline Sp. z o.o. uzyskał zgodę (digital_consent=YES). Klientka udostępniła dane logowania siostrze (password_shared=YES). Klientka sama nie skorzystała z platformy (download_started_flag=NO). Klientka złożyła oświadczenie o odstąpieniu (STMT191) dnia 15 lutego 2026.
+
+Sklep odmówił – konto było użytkowane przez osobę trzecią. Klientka kwestionuje.

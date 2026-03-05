@@ -1,0 +1,5 @@
+Rafał Wiśniewski (konsument) złożył zamówienie O116 dnia 3 lutego 2026 na tablet (produkt fizyczny PROD116). Sklep TechWorld Sp. z o.o. przyjął zamówienie 3 lutego 2026. Klient zapłacił przelewem (PAY116) kwotę 1 299,00 zł dnia 4 lutego 2026.
+
+Towar dostarczono (DEL116) dnia 9 lutego 2026. Po uruchomieniu tablet nie włącza się – towar wadliwy (defective=YES). Klient złożył oświadczenie o odstąpieniu (STMT116) dnia 12 lutego 2026. Sklep zgodził się pokryć koszt odesłania (store_pays_return=YES). Towar odesłano (RS116) 13 lutego 2026.
+
+Klient oczekuje zwrotu 1 299,00 zł.

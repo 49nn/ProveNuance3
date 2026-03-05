@@ -1,0 +1,5 @@
+Piotr Zając (konsument) złożył zamówienie O112 dnia 5 stycznia 2026 na zestaw garnków (produkt fizyczny PROD112). Sklep Kuchnia Polska Sp. z o.o. przyjął zamówienie 5 stycznia 2026. Klient zapłacił kartą kredytową (PAY112) kwotę 320,00 zł dnia 5 stycznia 2026.
+
+Towar dostarczono (DEL112) dnia 10 stycznia 2026. Klient złożył oświadczenie o odstąpieniu (STMT112) dnia 14 stycznia 2026 – 4 dni po dostawie. Towar odesłano (RS112) tego samego dnia.
+
+Klient oczekuje zwrotu 320,00 zł na kartę.

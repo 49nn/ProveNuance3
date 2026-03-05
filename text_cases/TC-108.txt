@@ -1,0 +1,5 @@
+Rozalia Kowalczyk (konsument) złożyła zamówienie O1008 dnia 17 marca 2026 na suplementy diety (produkt fizyczny PROD1008) za kwotę 200,00 zł. Sklep HealthShop Sp. z o.o. przyjął zamówienie. Klientka zapłaciła kartą (PAY1008).
+
+Towar dostarczono (DEL1008) dnia 22 marca 2026. Klientka otworzyła opakowanie i spożyła część tabletek. Klientka złożyła oświadczenie o odstąpieniu (STMT1008) dnia 24 marca 2026.
+
+Sklep odmówił zwrotu – produkt higieniczny/spożywczy po otwarciu opakowania nie podlega zwrotowi.

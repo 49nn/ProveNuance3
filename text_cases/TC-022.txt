@@ -1,0 +1,5 @@
+Adam Wojciechowski (konsument) złożył zamówienie O122 dnia 17 lutego 2026 na materac (produkt fizyczny PROD122). Sklep Sypialnia Sp. z o.o. przyjął zamówienie 17 lutego 2026. Klient zapłacił przelewem (PAY122) kwotę 1 800,00 zł.
+
+Towar dostarczono (DEL122) dnia 22 lutego 2026. Klient złożył oświadczenie o odstąpieniu (STMT122) dnia 25 lutego 2026. Jednak klient rozpatrzeł materac, zdjął folie ochronną. Sklep odmówił zwrotu argumentując, że produkt higieniczny po zdjęciu folii traci prawo do zwrotu.
+
+Klient kwestionuje tę decyzję.

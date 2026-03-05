@@ -1,0 +1,3 @@
+Agata Woźniak złożyła zamówienie O175 dnia 9 marca 2026 na laptop (produkt fizyczny PROD175) za kwotę 5 200,00 zł. W trakcie realizacji zamówienia sklep wykrył, że konto A1750 klientki zostało zawieszone z powodu nierozwiązanego sporu z poprzedniego zamówienia (account_status=BLOCKED).
+
+Sklep LaptopWorld Sp. z o.o. wstrzymał wysyłkę zamówienia O175. Klientce nie dostarczono towaru (DEL175 – brak dostawy). Klientka domaga się realizacji zamówienia lub zwrotu płatności (PAY175 – 5 200,00 zł już przelane).

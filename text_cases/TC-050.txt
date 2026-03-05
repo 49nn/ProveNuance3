@@ -1,0 +1,3 @@
+Małgorzata Szewczyk (konsument) złożyła zamówienie O150 dnia 15 stycznia 2026 na zegarek (produkt fizyczny PROD150). Sklep Watch&Co Sp. z o.o. przyjął zamówienie 15 stycznia 2026. Klientka zapłaciła kartą (PAY150) kwotę 890,00 zł.
+
+Towar dostarczono (DEL150) dnia 20 stycznia 2026. Zegarek przestał działać po tygodniu – wadliwy (defective=YES). Klientka złożyła oświadczenie o odstąpieniu (STMT150) dnia 22 stycznia 2026. Sklep odmówił zwrotu. Klientka otworzyła chargeback (chargeback_status=OPEN). Sklep zwrócił środki po wszczęciu postępowania. Chargeback zamknięty na korzyść klientki (chargeback_status=RESOLVED_CUSTOMER).

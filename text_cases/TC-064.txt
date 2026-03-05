@@ -1,0 +1,5 @@
+Halina Wiśniewska (konsument) złożyła zamówienie O164 dnia 19 lutego 2026 na odzież (produkt fizyczny PROD164) za kwotę 900,00 zł. Do zamówienia zastosowała kupon FASHION30 (30% rabatu na ubrania, coupon_stackable=YES). Kupon był dedykowany tylko dla kategorii odzieży – zamówienie jest kwalifikujące.
+
+Sklep ModaOnline Sp. z o.o. zastosował rabat 270,00 zł. Klientka zapłaciła kartą (PAY164) kwotę 630,00 zł.
+
+Transakcja przebiegła prawidłowo.

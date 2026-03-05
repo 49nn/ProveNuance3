@@ -1,0 +1,5 @@
+Paweł Zawadzki (konsument) złożył zamówienie O136 dnia 22 stycznia 2026 na raport branżowy w formacie PDF (produkt cyfrowy PROD136). Sklep ReportHub Sp. z o.o. przyjął zamówienie 22 stycznia 2026. Klient zapłacił kartą (PAY136) kwotę 350,00 zł.
+
+Sklep uzyskał zgodę na natychmiastowe wykonanie umowy (digital_consent=YES). Klient pobrał raport (download_started_flag=YES). Klient złożył oświadczenie o odstąpieniu (STMT136) dnia 24 stycznia 2026, twierdząc że raport zawiera przestarzałe dane.
+
+Sklep odmówił zwrotu. Pobranie miało miejsce po wyrażeniu zgody. Klient otworzył chargeback.

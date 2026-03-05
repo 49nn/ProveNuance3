@@ -1,0 +1,5 @@
+Wanda Jabłońska (konsument) odkryła dnia 5 marca 2026 nieautoryzowane zamówienie O171 złożone na jej koncie A1710 przez nieznana osobę (password_shared=YES – konto przejęte). Zamówienie opiewało na kwotę 1 800,00 zł (produkt fizyczny PROD171), opłacone kartą (PAY171) przypisaną do konta.
+
+Klientka natychmiast zgłosiła incydent sklepowi OnlineMall Sp. z o.o. i bankowi. Zamówienie zostało anulowane, a środki zablokowane do wyjaśnienia. Konto zablokowane (account_status=BLOCKED) tymczasowo.
+
+Klientka oczekuje zwrotu środków i ukarania sprawcy.

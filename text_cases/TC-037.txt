@@ -1,0 +1,5 @@
+Firma ABC Sp. z o.o. (klient biznesowy) złożyła zamówienie O137 dnia 2 lutego 2026 na 20 laptopów biurowych (produkt fizyczny PROD137). Sklep IT-Pro Sp. z o.o. przyjął zamówienie 2 lutego 2026. Klient dokonał płatności przelewem (PAY137) kwotę 48 000,00 zł dnia 3 lutego 2026.
+
+Towar dostarczono (DEL137) dnia 8 lutego 2026. Firma ABC zażądała zwrotu, powołując się na prawo konsumenckie do odstąpienia, złożyła oświadczenie (STMT137) dnia 10 lutego 2026.
+
+Sklep odmówił – umowa zawarta między przedsiębiorcami nie podlega przepisom konsumenckim o odstąpieniu.

@@ -1,0 +1,5 @@
+Zenon Woźniak (konsument) złożył zamówienie O197 dnia 6 marca 2026 o godz. 08:15 na zegarek (produkt fizyczny PROD197) za kwotę 1 200,00 zł. Klient zapłacił kartą (PAY197).
+
+Dnia 6 marca 2026 o godz. 09:30 klient skontaktował się ze sklepem ChronoShop Sp. z o.o. i anulował zamówienie przed jego wysłaniem. Sklep potwierdził anulowanie – towar nie opuścił magazynu.
+
+Sklep zwrócił 1 200,00 zł na kartę w ciągu 3 dni roboczych. Sprawa zakończona pomyślnie.

@@ -1,0 +1,5 @@
+Karolina Nowak (konsument) złożyła zamówienie O129 dnia 7 stycznia 2026 na e-booka (produkt cyfrowy PROD129). Sklep Ebook&Co Sp. z o.o. przyjął zamówienie 7 stycznia 2026. Klientka zapłaciła przelewem (PAY129) kwotę 39,00 zł.
+
+Sklep nie uzyskał wyraźnej zgody klientki na natychmiastowe wykonanie umowy (digital_consent=NO). Klientka nie pobrała pliku (download_started_flag=NO). Klientka złożyła oświadczenie o odstąpieniu (STMT129) dnia 10 stycznia 2026.
+
+Klientka oczekuje zwrotu 39,00 zł. Sklep nie ma podstaw do odmowy.

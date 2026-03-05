@@ -1,0 +1,5 @@
+Kazimiera Nowak (konsument) złożyła zamówienie O185 dnia 28 lutego 2026 na odkurzacz (produkt fizyczny PROD185) za kwotę 800,00 zł. Klientka zapłaciła częściowo kartą 400,00 zł (PAY185a) i częściowo BLIKiem 400,00 zł (PAY185b). Obie płatności zostały zaksięgowane.
+
+Towar dostarczono (DEL185) dnia 5 marca 2026. Klientka złożyła oświadczenie o odstąpieniu (STMT185) dnia 10 marca 2026. Sklep CleanHome Sp. z o.o. zobowiązał się zwrócić 400,00 zł na kartę i 400,00 zł przelewem.
+
+Sprawa w toku.

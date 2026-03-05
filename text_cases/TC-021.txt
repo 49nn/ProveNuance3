@@ -1,0 +1,5 @@
+Natalia Zielińska (konsument) złożyła zamówienie O121 dnia 15 lutego 2026 na drukarkę domową (produkt fizyczny PROD121). Sklep Biuro&Dom Sp. z o.o. przyjął zamówienie 15 lutego 2026. Klientka zapłaciła kartą (PAY121) kwotę 560,00 zł.
+
+Towar dostarczono (DEL121) dnia 20 lutego 2026. Klientka złożyła oświadczenie o odstąpieniu (STMT121) dnia 4 marca 2026 – 13 dni po dostawie, w ostatnim dniu ustawowego terminu. Towar odesłano (RS121) 5 marca 2026.
+
+Klientka oczekuje zwrotu 560,00 zł.

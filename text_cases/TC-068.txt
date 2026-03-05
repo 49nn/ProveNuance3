@@ -1,0 +1,5 @@
+Renata Nowakowska złożyła zamówienie O168 dnia 3 marca 2026 na smartfon (produkt fizyczny PROD168). Po złożeniu zamówienia sklep wykrył, że klientka udostępniła dane logowania osobie trzeciej w celu dokonania nieautoryzowanych zakupów (password_shared=YES). Konto A1680 zostało zablokowane (account_status=BLOCKED).
+
+Sklep MobileShop Sp. z o.o. anulował zamówienie O168 ze względu na naruszenie regulaminu.
+
+Klientka kwestionuje blokadę, twierdząc że nie udostępniła danych.

@@ -94,9 +94,9 @@ def save_proof_run(
                 used_fact_ids.append(dep_fact_id)
 
         proof_dag[atom_str] = {
-            "rule_id": node.rule_id,
-            "body_atoms": [_atom_to_str(dep) for dep in node.pos_used],
-            "naf_atoms": [_atom_to_str(dep) for dep in node.neg_checked],
+            "rule_id":     node.rule_id,
+            "depends_on":  [_atom_to_str(dep) for dep in node.pos_used],
+            "naf_checked": [_atom_to_str(dep) for dep in node.neg_checked],
             "substitution": dict(node.substitution),
             "status": "base" if node.rule_id is None else "derived",
         }

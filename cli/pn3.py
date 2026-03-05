@@ -1642,7 +1642,10 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
       pn3 ingest-folder text_cases/ --backend llm
       pn3 ingest-folder text_cases/ --dry-run
       pn3 ingest-folder text_cases/ --pattern "TC-*.txt"
+      pn3 ingest-folder text_cases/ --workers 8
     """
+    import threading
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     from pathlib import Path
 
     from config import ProjectConfig
@@ -1665,19 +1668,24 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
         from dataclasses import replace as dc_replace
         cfg = dc_replace(cfg, extractor=dc_replace(cfg.extractor, backend=args.backend))
 
+    workers = getattr(args, "workers", 8) or 8
+
     _api_key = os.environ.get(cfg.extractor.api_key_env, "")
     _key_hint = f"…{_api_key[-4:]}" if _api_key else "BRAK"
     backend_info = (
         f"llm, model={cfg.extractor.gemini_model}, key={_key_hint}"
         if cfg.extractor.backend == "llm" else cfg.extractor.backend
     )
-    console.print(f"[dim]Folder: {folder}  |  pliki: {len(files)}  |  backend: {backend_info}[/dim]")
+    console.print(
+        f"[dim]Folder: {folder}  |  pliki: {len(files)}  |  "
+        f"backend: {backend_info}  |  workers: {workers}[/dim]"
+    )
 
+    # ── Faza 1: wczytaj pliki i utwórz case'y w DB (sekwencyjnie) ─────────────
+    tasks: list[tuple[str, str, str]] = []  # (case_id, source_id, text)
+    skipped = 0
     with DBSession.connect() as session:
         schemas = session.load_cluster_schemas()
-        extractor = get_extractor(schemas, cfg)
-
-        ok = skipped = errors = 0
         for f in files:
             case_id = f.stem
             source_id = f"{case_id}-TEXT"
@@ -1686,28 +1694,70 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
                 console.print(f"  [yellow]SKIP[/yellow] {f.name} — pusty plik")
                 skipped += 1
                 continue
-
             try:
                 with session.conn.transaction():
                     _ensure_case_exists(session.conn, case_id, source_id, case_id)
+                tasks.append((case_id, source_id, text))
+            except Exception as exc:
+                console.print(f"  [bold red]ERR[/bold red] {case_id} (setup): {exc}")
+                skipped += 1
 
-                result = extractor.extract(text, source_id=source_id)
+    if not tasks:
+        console.print("[yellow]Brak zadań do przetworzenia.[/yellow]")
+        return
 
-                if args.dry_run:
-                    console.print(f"  [yellow]DRY[/yellow] {case_id}: {result.summary()}")
-                    skipped += 1
-                    continue
+    # ── Faza 2: ekstrakcja równoległa ─────────────────────────────────────────
+    # Każdy wątek tworzy własny ekstraktor – dla llm osobna sesja HTTP, dla regex bezstanowy.
+    print_lock = threading.Lock()
 
+    def _extract_one(task: tuple[str, str, str]):
+        case_id, source_id, text = task
+        local_extractor = get_extractor(schemas, cfg)
+        return case_id, source_id, text, local_extractor.extract(text, source_id=source_id)
+
+    results: list[tuple[str, str, str, object]] = []
+    errors_extract = 0
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_extract_one, t): t[0] for t in tasks}
+        for fut in as_completed(futures):
+            case_id = futures[fut]
+            try:
+                results.append(fut.result())
+                with print_lock:
+                    console.print(f"  [cyan]extracted[/cyan] {case_id}")
+            except Exception as exc:
+                with print_lock:
+                    console.print(f"  [bold red]ERR[/bold red] {case_id} (extract): {exc}")
+                errors_extract += 1
+
+    if args.dry_run:
+        for case_id, _sid, _txt, result in sorted(results, key=lambda r: r[0]):
+            console.print(f"  [yellow]DRY[/yellow] {case_id}: {result.summary()}")
+        console.print(
+            f"\n[bold]ingest-folder dry-run[/bold]: "
+            f"[cyan]{len(results)} extracted[/cyan]  "
+            f"[yellow]{skipped} pominięto[/yellow]  [red]{errors_extract} błędów[/red]"
+        )
+        return
+
+    # ── Faza 3: zapis do DB (sekwencyjnie) ────────────────────────────────────
+    ok = errors_save = 0
+    with DBSession.connect() as session:
+        for case_id, _sid, text, result in sorted(results, key=lambda r: r[0]):
+            try:
                 session.save_extraction_result(result, case_id=case_id, source_text=text)
                 console.print(f"  [green]OK[/green]  {case_id}: {result.summary()}")
                 ok += 1
             except Exception as exc:
-                console.print(f"  [bold red]ERR[/bold red] {case_id}: {exc}")
-                errors += 1
+                console.print(f"  [bold red]ERR[/bold red] {case_id} (save): {exc}")
+                errors_save += 1
 
     console.print(
         f"\n[bold]ingest-folder zakończony[/bold]: "
-        f"[green]{ok} OK[/green]  [yellow]{skipped} pominięto[/yellow]  [red]{errors} błędów[/red]"
+        f"[green]{ok} OK[/green]  "
+        f"[yellow]{skipped} pominięto[/yellow]  "
+        f"[red]{errors_extract + errors_save} błędów[/red]"
     )
 
 
@@ -1772,6 +1822,13 @@ def _add_template_cluster_edges(data, node_index, schemas) -> set[tuple[str, str
                 if eid in dst_map
             )
             if not pairs:
+                # No same-entity overlap — use cross-product of all nodes of the same entity_type
+                pairs = sorted(set(
+                    (si, di)
+                    for si in src_map.values()
+                    for di in dst_map.values()
+                ))
+            if not pairs:
                 continue
 
             uniq_pairs = sorted(set(pairs))
@@ -1835,6 +1892,9 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
             for dst in schemas
             if src.name != dst.name and src.entity_type == dst.entity_type
         ]
+
+        import torch as _torch
+        _torch.manual_seed(args.seed)
 
         mp_bank = HeteroMessagePassingBank(role_specs + implies_specs)
         gate_bank = ExceptionGateBank(gate_specs=[])
@@ -2081,6 +2141,13 @@ def cmd_explain(args: argparse.Namespace) -> None:
         console.print(f"[bold red]Brak faktów dla case {case_id}.[/bold red] Uruchom najpierw run-case.")
         return
 
+    # Wyciągnij neural_trace z proweniencji faktów (załadowanej z DB przez fact_repo)
+    neural_trace = {
+        f.fact_id: f.provenance.neural_trace
+        for f in facts
+        if f.provenance and f.provenance.neural_trace
+    } or None
+
     explainer = LLMExplainer(cfg.explainer)
 
     if args.dry_run:
@@ -2090,6 +2157,7 @@ def cmd_explain(args: argparse.Namespace) -> None:
             proof_run=proof_run,
             cluster_states=cluster_states,
             entities=entities,
+            neural_trace=neural_trace,
         )
         if args.raw:
             print("=== SYSTEM PROMPT ===")
@@ -2111,10 +2179,12 @@ def cmd_explain(args: argparse.Namespace) -> None:
                 border_style="yellow",
                 expand=True,
             ))
+            nn_trace_count = sum(len(v) for v in (neural_trace or {}).values())
             console.print(
                 f"\n[dim]Fakty: {len(facts)} | "
                 f"Klastry: {len(cluster_states)} | "
-                f"Proof: {'tak' if proof_run else 'brak'}[/dim]"
+                f"Proof: {'tak' if proof_run else 'brak'} | "
+                f"Neural trace: {nn_trace_count} wpisów[/dim]"
             )
         return
 
@@ -2127,6 +2197,7 @@ def cmd_explain(args: argparse.Namespace) -> None:
         proof_run=proof_run,
         cluster_states=cluster_states,
         entities=entities,
+        neural_trace=neural_trace,
     )
 
     if args.output:
@@ -2595,6 +2666,13 @@ def main() -> None:
                 "--dry-run",
                 action="store_true",
                 help="Pokaż wynik ekstrakcji bez zapisu do DB.",
+            )
+            cmd_parser.add_argument(
+                "--workers",
+                type=int,
+                default=8,
+                metavar="N",
+                help="Liczba równoległych wątków ekstrakcji (domyślnie: 8).",
             )
         elif name == "llm-prompt":
             cmd_parser.add_argument(

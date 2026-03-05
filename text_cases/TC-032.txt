@@ -1,0 +1,5 @@
+Michał Piotrowski (konsument) złożył zamówienie O132 dnia 14 stycznia 2026 na oprogramowanie antywirusowe (produkt cyfrowy PROD132). Sklep SecureIT Sp. z o.o. przyjął zamówienie 14 stycznia 2026. Klient zapłacił BLIKiem (PAY132) kwotę 129,00 zł.
+
+Sklep uzyskał zgodę na natychmiastowe wykonanie umowy (digital_consent=YES). Klient zainstalował oprogramowanie (download_started_flag=YES) i udostępnił klucz aktywacyjny osobie trzeciej (password_shared=YES). Klient złożył oświadczenie o odstąpieniu (STMT132) dnia 18 stycznia 2026.
+
+Sklep odmówił zwrotu z dwóch powodów: pobranie nastąpiło i klucz był współdzielony.

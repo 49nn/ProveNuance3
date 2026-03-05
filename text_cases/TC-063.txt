@@ -1,0 +1,5 @@
+Konrad Mazurek (konsument) złożył zamówienie O163 dnia 17 lutego 2026 na artykuły ogrodnicze (produkt fizyczny PROD163) za kwotę 350,00 zł. Do zamówienia zastosował kupon GARDEN15 (15% rabatu, coupon_stackable=NO) oraz kupon SAVE25 (25 zł zniżki, coupon_stackable=YES).
+
+Sklep OgrodniczoZakupy Sp. z o.o. zastosował tylko kupon GARDEN15, ponieważ nie można go łączyć z innymi. Klient chciał skumulować oba rabaty.
+
+Sklep prawidłowo zastosował tylko kupon niełączony.

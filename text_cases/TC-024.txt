@@ -1,0 +1,5 @@
+Robert Jankowski (konsument) złożył zamówienie O124 dnia 22 lutego 2026 na wózek dziecięcy (produkt fizyczny PROD124). Sklep Dziecko&Mama Sp. z o.o. przyjął zamówienie 22 lutego 2026. Klient zapłacił kartą (PAY124) kwotę 1 450,00 zł.
+
+Towar dostarczono (DEL124) dnia 28 lutego 2026. Wózek ma uszkodzoną ramę – towar wadliwy (defective=YES). Klient złożył oświadczenie o odstąpieniu (STMT124) dnia 3 marca 2026 z powodu wady. Sklep zaproponował naprawę zamiast zwrotu.
+
+Klient odmawia naprawy i żąda zwrotu pieniędzy.

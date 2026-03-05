@@ -1,0 +1,5 @@
+Henryk Mazur (konsument) złożył zamówienie O151 dnia 17 stycznia 2026 na tablet (produkt fizyczny PROD151). Sklep TechShop Sp. z o.o. przyjął zamówienie 17 stycznia 2026. Klient zapłacił kartą (PAY151) kwotę 1 100,00 zł.
+
+Towar dostarczono (DEL151) dnia 22 stycznia 2026. Klient złożył oświadczenie o odstąpieniu (STMT151) dnia 29 stycznia 2026. Sklep przyjął zwrot i zwrócił pieniądze. Następnie klient – mimo już dokonanego zwrotu – otworzył chargeback (chargeback_status=OPEN) dnia 10 lutego 2026, próbując uzyskać podwójny zwrot.
+
+Bank zamknął chargeback na korzyść sklepu (chargeback_status=RESOLVED_STORE) – klient otrzymał już zwrot.

@@ -1,0 +1,5 @@
+Marta Nowicka (konsument) złożyła zamówienie O135 dnia 20 stycznia 2026 na pakiet szablonów graficznych (produkt cyfrowy PROD135). Sklep DesignPack Sp. z o.o. przyjął zamówienie 20 stycznia 2026. Klientka zapłaciła kartą (PAY135) kwotę 79,00 zł.
+
+Sklep nie poinformował klientki o utracie prawa do odstąpienia przy treściach cyfrowych (digital_consent=NO). Klientka pobrała szablony (download_started_flag=YES). Klientka złożyła oświadczenie o odstąpieniu (STMT135) dnia 25 stycznia 2026.
+
+Klientka żąda zwrotu. Sklep kwestionuje, jednak brak wymaganej zgody działa na korzyść klientki.

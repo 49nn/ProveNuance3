@@ -6,9 +6,11 @@ Interfejs:
     explanation = explainer.explain(
         case_text="...",
         facts=result.facts,
-        proof_run=proof_run,          # opcjonalnie
+        proof_run=proof_run,          # opcjonalnie — proweniencja symboliczna
         cluster_states=result.cluster_states,
-        entities=result.entities,     # opcjonalnie — do mapowania ID → nazwy
+        entities=result.entities,     # opcjonalnie — do mapowania ID -> nazwy
+        neural_trace=trace_dict,      # opcjonalnie — proweniencja neuronalna
+                                      #   dict[target_fact_id, list[NeuralTraceItem]]
     )
     print(explanation)  # naturalny tekst po polsku (lub angielsku)
 
@@ -23,7 +25,7 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from data_model.entity import Entity
-from data_model.fact import Fact, FactStatus
+from data_model.fact import Fact, FactStatus, NeuralTraceItem
 
 from .prompt import build_system_prompt, build_user_message
 
@@ -70,6 +72,7 @@ class LLMExplainer:
         proof_run: "ProofRun | None" = None,
         cluster_states: "list[ClusterStateRow] | None" = None,
         entities: list[Entity] | None = None,
+        neural_trace: dict[str, list[NeuralTraceItem]] | None = None,
     ) -> str:
         """
         Generuje wyjaśnienie sprawy w języku naturalnym.
@@ -77,9 +80,11 @@ class LLMExplainer:
         Parametry:
             case_text:      oryginalny tekst sprawy
             facts:          fakty z PipelineResult / ExtractionResult
-            proof_run:      dowód logiczny z build_proof_run() (opcjonalny)
+            proof_run:      dowód logiczny z build_proof_run() (proweniencja symboliczna)
             cluster_states: stany klastrów (np. customer_type=BUSINESS)
-            entities:       lista encji do mapowania ID → canonical_name
+            entities:       lista encji do mapowania ID -> canonical_name
+            neural_trace:   dict[target_fact_id, list[NeuralTraceItem]] (proweniencja NN)
+                            Budowany przez: {fid: tracer.finalize(fid) for fid in fact_ids}
 
         Zwraca:
             str — odpowiedź Gemini w naturalnym języku
@@ -93,6 +98,7 @@ class LLMExplainer:
             cluster_states=cluster_states,
             entity_map=entity_map,
             grounded=self._config.grounded,
+            neural_trace=neural_trace,
         )
         response = self._client.models.generate_content(
             model=self._config.gemini_model,
@@ -112,6 +118,7 @@ class LLMExplainer:
         proof_run: "ProofRun | None" = None,
         cluster_states: "list[ClusterStateRow] | None" = None,
         entities: list[Entity] | None = None,
+        neural_trace: dict[str, list[NeuralTraceItem]] | None = None,
     ) -> dict[str, str]:
         """
         Zwraca słownik z pełną treścią żądania bez wywoływania API.
@@ -130,6 +137,7 @@ class LLMExplainer:
             cluster_states=cluster_states,
             entity_map=entity_map,
             grounded=self._config.grounded,
+            neural_trace=neural_trace,
         )
         return {
             "system_prompt": self._system_prompt,

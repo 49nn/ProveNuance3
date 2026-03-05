@@ -1,0 +1,5 @@
+Monika Kwiatkowska (konsument) złożyła zamówienie O125 dnia 25 lutego 2026 na suszarkę do włosów (produkt fizyczny PROD125). Sklep Uroda Sp. z o.o. przyjął zamówienie 25 lutego 2026. Klientka zapłaciła COD (PAY125) – kwota 180,00 zł.
+
+Towar dostarczono (DEL125) dnia 28 lutego 2026; klientka zapłaciła przy odbiorze. Klientka stwierdziła, że suszarka jest wadliwa – przestała działać po 3 użyciach (defective=YES). Złożyła oświadczenie o odstąpieniu (STMT125) dnia 5 marca 2026. Sklep odmówił, twierdząc że produkty elektryczne po użyciu nie podlegają zwrotowi.
+
+Klientka kwestionuje decyzję sklepu.

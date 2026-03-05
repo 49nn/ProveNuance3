@@ -1,0 +1,5 @@
+Dominik Nowak (konsument) złożył zamówienie O157 dnia 5 lutego 2026 na elektronikę (produkt fizyczny PROD157) za kwotę 1 200,00 zł. Do zamówienia zastosował kupon TECH15 (15% rabatu, coupon_stackable=YES) oraz kupon EXTRA5 (5% rabatu, coupon_stackable=YES). Oba kupony można łączyć.
+
+Sklep ElektroShop Sp. z o.o. przyjął zamówienie i zastosował łączny rabat 240,00 zł. Klient zapłacił kartą (PAY157) kwotę 960,00 zł.
+
+Transakcja przebiegła prawidłowo.

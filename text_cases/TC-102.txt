@@ -1,0 +1,5 @@
+Halina Górska (konsument) złożyła zamówienie O1002 dnia 11 marca 2026 na bon podarunkowy (produkt cyfrowy PROD1002) za 500,00 zł. Sklep GiftCard Sp. z o.o. przyjął zamówienie. Klientka zapłaciła kartą (PAY1002).
+
+Bon był wysłany emailem (digital_consent=YES, download_started_flag=YES). Klientka złożyła oświadczenie o odstąpieniu (STMT1002) dnia 13 marca 2026, twierdząc że nie zamawiała.
+
+Sklep odmówił zwrotu – bon został dostarczony i był widoczny w skrzynce klientki.

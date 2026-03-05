@@ -1,0 +1,5 @@
+Elżbieta Krawczyk (konsument) złożyła zamówienie O1000x dnia 9 marca 2026 na komplet pościeli (produkt fizyczny PROD1000x) za kwotę 350,00 zł. Sklep BedsideShop Sp. z o.o. przyjął zamówienie. Klientka zapłaciła BLIKiem (PAY1000x).
+
+Towar dostarczono (DEL1000x) dnia 14 marca 2026. Klientka stwierdziła, że pościel ma inny wymiar niż podany na stronie. Sklep przyznał błąd w opisie produktu. Klientka złożyła oświadczenie o odstąpieniu (STMT1000x) dnia 16 marca 2026.
+
+Sklep zwrócił 350,00 zł i przeprosił za błąd w opisie. Sprawa zakończona polubownie.

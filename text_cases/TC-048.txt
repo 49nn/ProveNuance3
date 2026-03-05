@@ -1,0 +1,5 @@
+Zofia Dąbrowska (konsument) złożyła zamówienie O148 dnia 10 stycznia 2026 na krem do twarzy (produkt fizyczny PROD148). Sklep BeautyBox Sp. z o.o. przyjął zamówienie 10 stycznia 2026. Klientka zapłaciła kartą (PAY148) kwotę 120,00 zł.
+
+Towar dostarczono (DEL148) dnia 15 stycznia 2026. Klientka stwierdziła, że krem jest przeterminowany (defective=YES). Złożyła oświadczenie o odstąpieniu (STMT148) dnia 17 stycznia 2026. Sklep zignorował reklamację. Klientka otworzyła chargeback (chargeback_status=OPEN) dnia 1 lutego 2026.
+
+Bank rozpatrzył spór na korzyść klientki (chargeback_status=RESOLVED_CUSTOMER).

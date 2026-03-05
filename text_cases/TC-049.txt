@@ -1,0 +1,5 @@
+Tadeusz Lewandowski (konsument) złożył zamówienie O149 dnia 12 stycznia 2026 na zabawkę dla dziecka (produkt fizyczny PROD149). Sklep ToyWorld Sp. z o.o. przyjął zamówienie 12 stycznia 2026. Klient zapłacił kartą (PAY149) kwotę 95,00 zł.
+
+Towar dostarczono (DEL149) dnia 17 stycznia 2026. Klient złożył oświadczenie o odstąpieniu (STMT149) dnia 28 stycznia 2026 – 11 dni po dostawie. Sklep przyjął towar. Mimo to sklep nie zwrócił pieniędzy w ciągu 14 dni. Klient otworzył chargeback (chargeback_status=OPEN) dnia 20 lutego 2026.
+
+Chargeback jest w trakcie rozpatrywania.

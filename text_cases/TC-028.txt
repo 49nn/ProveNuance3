@@ -1,0 +1,5 @@
+Bartosz Wiśniewski (konsument) złożył zamówienie O128 dnia 5 stycznia 2026 na kurs online (produkt cyfrowy PROD128). Sklep Edukacja Online Sp. z o.o. przyjął zamówienie 5 stycznia 2026. Klient zapłacił kartą (PAY128) kwotę 599,00 zł.
+
+Sklep nie uzyskał zgody klienta na natychmiastowe wykonanie umowy (digital_consent=NO) – pominął ten krok. Klient uzyskał dostęp do kursu i zaczął go oglądać (download_started_flag=YES). Klient złożył oświadczenie o odstąpieniu (STMT128) dnia 8 stycznia 2026.
+
+Klient oczekuje zwrotu 599,00 zł. Ponieważ sklep nie uzyskał zgody, ma ograniczone możliwości obrony.

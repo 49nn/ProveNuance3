@@ -1,0 +1,5 @@
+Sylwia Pawlak (konsument) złożyła zamówienie O123 dnia 20 lutego 2026 na aparat fotograficzny (produkt fizyczny PROD123). Sklep Foto&Film Sp. z o.o. przyjął zamówienie 20 lutego 2026. Klientka zapłaciła BLIKiem (PAY123) kwotę 2 100,00 zł.
+
+Towar dostarczono (DEL123) dnia 25 lutego 2026. Aparat jest sprawny, ale klientka stwierdziła że to nie ten model co zamawiała (sklep pomylił model). Klientka złożyła oświadczenie o odstąpieniu (STMT123) dnia 27 lutego 2026. Sklep przyznał błąd i zgodził się na zwrot.
+
+Klientka oczekuje pełnego zwrotu 2 100,00 zł.

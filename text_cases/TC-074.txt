@@ -1,0 +1,5 @@
+Lechosław Wiśniewski złożył zamówienie O174 dnia 8 marca 2026 na sprzęt audio (produkt fizyczny PROD174) za kwotę 2 100,00 zł. Jego konto A1740 jest aktywne (account_status=ACTIVE), ale toczy się otwarte postępowanie sporne dotyczące poprzedniego zamówienia (chargeback_status=OPEN dla O173a).
+
+Sklep AudioPro Sp. z o.o. przyjął nowe zamówienie O174, jednocześnie monitorując otwarte postępowanie.
+
+Klient zapłacił kartą (PAY174). Dostawa planowana dnia 13 marca 2026.

@@ -1,0 +1,5 @@
+Grażyna Makowska (konsument) złożyła zamówienie O1010 dnia 19 marca 2026 na zestawy świąteczne (produkt fizyczny PROD1010) za kwotę 1 100,00 zł. Sklep GiftBox Sp. z o.o. przyjął zamówienie. Klientka zapłaciła kartą (PAY1010).
+
+Towar dostarczono (DEL1010) dnia 24 marca 2026. Klientka stwierdziła, że jeden z zestawów był uszkodzony (defective=YES). Sklep zaproponował 15% rabat zamiast zwrotu. Klientka złożyła oświadczenie o odstąpieniu (STMT1010) dnia 26 marca 2026 na cały zestaw.
+
+Sklep kwestionuje prawo do zwrotu całości – twierdzi, że wadliwy był tylko jeden element. Klientka nalega na pełny zwrot 1 100,00 zł.

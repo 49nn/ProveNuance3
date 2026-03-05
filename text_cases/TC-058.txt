@@ -1,0 +1,5 @@
+Alicja Pawłowska (konsument) złożyła zamówienie O158 dnia 7 lutego 2026 na kosmetyki (produkt fizyczny PROD158) za kwotę 300,00 zł. Klientka zastosowała kupon BEAUTY20 (20% rabatu, coupon_stackable=NO) oraz kupon GIFT10 (10% rabatu, coupon_stackable=YES).
+
+Sklep Beauty&Care Sp. z o.o. odrzucił kupon GIFT10, ponieważ kupon BEAUTY20 nie może być łączony z innymi promocjami. Klientka zaprotestowała.
+
+Sklep ma rację – kupon BEAUTY20 z parametrem coupon_stackable=NO wyklucza stosowanie innych kuponów.

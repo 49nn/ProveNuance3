@@ -3,13 +3,19 @@ prompt.py — Budowanie promptów dla LLM Explainer.
 
 Eksportuje:
     build_system_prompt(language) → str
-    build_user_message(case_text, facts, proof_run, cluster_states, entity_map) → str
+    build_user_message(case_text, facts, proof_run, cluster_states, entity_map,
+                       neural_trace, grounded) → str
+
+Proweniencja w user_message:
+  - Symboliczna: proof_dag (depends_on + naf_checked) + used_fact_ids z ProofStep
+  - Tekstowa:    source_id przy każdym fakcie (skąd pochodzi obserwacja)
+  - Neuronalna:  neural_trace — dict[fact_id, list[NeuralTraceItem]] (top-k wpływów NN)
 """
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from data_model.fact import Fact, FactStatus
+from data_model.fact import Fact, FactStatus, NeuralTraceItem
 
 if TYPE_CHECKING:
     from nn.graph_builder import ClusterStateRow
@@ -100,12 +106,19 @@ _SYSTEM_PL = """\
 Jesteś asystentem analizującym spory e-commerce na podstawie dostarczonych danych.
 
 Otrzymasz opis sprawy oraz dane wyekstrahowane przez system automatycznej analizy:
-właściwości stron, stwierdzone fakty i (opcjonalnie) dowód logiczny.
+właściwości stron, stwierdzone fakty, (opcjonalnie) dowód logiczny i ślad sieci neuronowej.
 
 Twoim zadaniem jest:
 1. Wyjaśnić sytuację prawną w sposób jasny i zrozumiały dla człowieka.
 2. Wskazać kluczowe fakty mające wpływ na ocenę sprawy.
 3. Podać wniosek: jakie prawa i obowiązki wynikają z ustalonych faktów.
+4. Wyjaśnić PROWENIENCJĘ wniosków — skąd system wywnioskował dane konkluzje:
+   - jeśli dostępny jest Dowód logiczny: wskaż które fakty były przesłankami (sekcja "bo:"),
+     które warunki musiały NIE zachodzić (sekcja "brak:"), i jaką regułą posłużył się system;
+   - jeśli dostępny jest Ślad sieci neuronowej: opisz które właściwości stron lub inne fakty
+     wzmocniły (+) lub osłabiły (−) ocenę poszczególnych faktów;
+   - jeśli wynik dowodu to "unknown" lub "not_proved": wyjaśnij wprost, że system nie znalazł
+     pasujących reguł i ocena opiera się wyłącznie na zaobserwowanych faktach.
 
 WAŻNE OGRANICZENIA:
 - Opieraj się WYŁĄCZNIE na faktach i właściwościach zawartych w sekcjach poniżej.
@@ -122,12 +135,19 @@ _SYSTEM_EN = """\
 You are an assistant analyzing e-commerce disputes based on the provided data.
 
 You will receive a case description and data extracted by an automated analysis system:
-party attributes, established facts, and (optionally) a logical proof.
+party attributes, established facts, an optional logical proof, and an optional neural trace.
 
 Your task:
 1. Explain the legal situation in a clear, human-readable way.
 2. Highlight the key facts affecting the legal assessment.
 3. State the conclusion: what rights and obligations follow from the established facts.
+4. Explain the PROVENANCE of conclusions — how the system reached each conclusion:
+   - if a Logical proof is available: cite which facts were premises (the "because:" lines),
+     which conditions had to be absent (the "absent:" lines), and which rule was applied;
+   - if a Neural trace is available: describe which party attributes or facts strengthened (+)
+     or weakened (−) the assessment of individual facts;
+   - if the proof result is "unknown" or "not_proved": state explicitly that no matching rules
+     were found and the assessment is based solely on observed facts.
 
 IMPORTANT CONSTRAINTS:
 - Base your analysis SOLELY on the facts and attributes provided in the sections below.
@@ -157,6 +177,7 @@ def build_user_message(
     cluster_states: "list[ClusterStateRow] | None",
     entity_map: dict[str, str],
     grounded: bool = False,
+    neural_trace: dict[str, list[NeuralTraceItem]] | None = None,
 ) -> str:
     """
     Buduje wiadomość użytkownika dla Gemini.
@@ -164,9 +185,10 @@ def build_user_message(
     Sekcje:
       1. Opis sprawy (oryginalny tekst) — pomijane gdy grounded=True
       2. Właściwości stron (cluster_states)
-      3. Stwierdzone fakty (proved > observed)
-      4. Dowód logiczny (ProofRun.steps, opcjonalnie)
-      5. Pytanie końcowe
+      3. Stwierdzone fakty (proved > observed) + tag source_id
+      4. Dowód logiczny (proof_dag z depends_on + naf_checked + used_fact_ids)
+      5. Ślad neuronalny (neural_trace — top-k wpływów NN per fakt, opcjonalnie)
+      6. Pytanie końcowe
 
     grounded=True: nie wysyła tekstu sprawy — LLM opiera się wyłącznie
     na danych strukturalnych (faktach i klastrach).
@@ -182,8 +204,7 @@ def build_user_message(
         lines = [_render_cluster(cs, entity_map) for cs in cluster_states]
         sections.append("## Właściwości stron\n\n" + "\n".join(lines))
 
-    # 3. Stwierdzone fakty
-    visible_statuses = {FactStatus.proved, FactStatus.observed}
+    # 3. Stwierdzone fakty (z source_id jako proweniencja tekstowa)
     proved = [f for f in facts if f.status == FactStatus.proved]
     observed = [f for f in facts if f.status == FactStatus.observed]
     all_visible = proved + observed  # proved najpierw
@@ -195,12 +216,17 @@ def build_user_message(
             header += f" ({len(proved)} udowodnionych, {len(observed)} zaobserwowanych)"
         sections.append(header + "\n\n" + "\n".join(fact_lines))
 
-    # 4. Dowód logiczny
+    # 4. Dowód logiczny (symboliczna proweniencja)
     if proof_run is not None:
-        proof_block = _render_proof_steps(proof_run)
+        proof_block = _render_proof_steps(proof_run, facts)
         sections.append("## Dowód logiczny\n\n" + proof_block)
 
-    # 5. Pytanie
+    # 5. Ślad neuronalny (proweniencja NN)
+    if neural_trace:
+        nn_block = _render_neural_trace(neural_trace, facts, entity_map)
+        sections.append("## Ślad sieci neuronowej\n\n" + nn_block)
+
+    # 6. Pytanie
     sections.append(
         "## Pytanie\n\n"
         "Na podstawie powyższych danych wyjaśnij sytuację prawną klienta i sklepu. "
@@ -243,17 +269,12 @@ def _atom_to_label(atom_str: str) -> str:
 
 
 def _render_fact(fact: Fact, entity_map: dict[str, str]) -> str:
-    """Konwertuje Fact na czytelną linię tekstową."""
+    """
+    Konwertuje Fact na czytelną linię tekstową.
+    Proweniencja tekstowa: source_id z fact.source dołączany jako tag "← source_id".
+    """
     label = _PREDICATE_PL.get(fact.predicate, fact.predicate)
     status_marker = "✓" if fact.status == FactStatus.proved else "·"
-
-    args_parts: list[str] = []
-    for arg in fact.args:
-        if arg.entity_id:
-            name = entity_map.get(arg.entity_id, arg.entity_id)
-            args_parts.append(name)
-        elif arg.literal_value:
-            args_parts.append(arg.literal_value)
 
     # Data (encje D_*) — wyciągnij czytelnie
     readable_args: list[str] = []
@@ -272,7 +293,14 @@ def _render_fact(fact: Fact, entity_map: dict[str, str]) -> str:
         parts = parts + [f"[{', '.join(date_parts)}]"]
 
     args_str = ", ".join(parts) if parts else ""
-    return f"{status_marker} {label}: {args_str}" if args_str else f"{status_marker} {label}"
+
+    # Proweniencja tekstowa — skąd pochodzi obserwacja
+    source_tag = ""
+    if fact.source and fact.source.source_id:
+        source_tag = f"  ← {fact.source.source_id}"
+
+    body = f"{label}: {args_str}" if args_str else label
+    return f"{status_marker} {body}{source_tag}"
 
 
 def _render_cluster(cs: "ClusterStateRow", entity_map: dict[str, str]) -> str:
@@ -312,14 +340,28 @@ def _render_cluster(cs: "ClusterStateRow", entity_map: dict[str, str]) -> str:
     return f"  - {name}: {cluster_label} = {value}"
 
 
-def _render_proof_steps(proof_run: "ProofRun") -> str:
-    """Renderuje udowodnione konkluzje z proof_dag do czytelnej formy tekstowej."""
-    if proof_run.result == "not_proved":
-        return "Nie udowodniono żadnej konkluzji logicznej."
+def _render_proof_steps(proof_run: "ProofRun", facts: list[Fact]) -> str:
+    """
+    Renderuje udowodnione konkluzje z proof_dag do czytelnej formy tekstowej.
 
-    # Renderuj z proof_dag (preferowane — zawiera atom + rule_id + body_atoms)
+    Proweniencja symboliczna:
+      - depends_on: atomy-przesłanki pozytywne (FIX: było "body_atoms")
+      - naf_checked: warunki które nie miały zachodzić (NAF)
+      - used_fact_ids: mapowanie na czytelne etykiety faktów wejściowych
+    """
+    if proof_run.result in ("not_proved", "unknown"):
+        n_base = sum(1 for e in proof_run.proof_dag if isinstance(e, dict) and e.get("rule_id") is None)
+        msg = "Żadna reguła nie wyprowadzi konkluzji dla tej sprawy."
+        if n_base:
+            msg += f" System ocenił {n_base} fakt(ów) bazowych, lecz nie znalazł pasujących przesłanek reguł."
+        return msg
+
+    # Indeks fact_id -> Fact (do mapowania used_fact_ids w ProofStep)
+    fact_index: dict[str, Fact] = {f.fact_id: f for f in facts}
+
+    # Preferowane: proof_dag (pełna proweniencja per atom)
     dag_entries = [e for e in proof_run.proof_dag if isinstance(e, dict) and "atom" in e]
-    # Pomiń atomy bazowe (status=base, rule_id=None) — to fakty wejściowe, nie konkluzje
+    # Pomiń atomy bazowe (rule_id=None) — to fakty wejściowe, nie konkluzje
     derived = [e for e in dag_entries if e.get("rule_id") is not None]
     if derived:
         lines: list[str] = [f"Wynik dowodu: **{proof_run.result}**\n"]
@@ -328,17 +370,23 @@ def _render_proof_steps(proof_run: "ProofRun") -> str:
             predicate = atom_str.split("(")[0].upper()
             atom_label = _PREDICATE_PL.get(predicate, predicate.replace("_", " ").title())
 
-            # Proweniencja: jakie atomy były przesłankami
-            body: list[str] = entry.get("body_atoms") or []
-            body_labels = [_atom_to_label(a) for a in body if a]
+            # Przesłanki pozytywne — "depends_on" (nowy format) lub "body_atoms" (stary DB)
+            depends_on: list[str] = entry.get("depends_on") or entry.get("body_atoms") or []
+            body_labels = [_atom_to_label(a) for a in depends_on if a]
+
+            # Warunki NAF — "naf_checked" (nowy) lub "naf_atoms" (stary DB)
+            naf_checked: list[str] = entry.get("naf_checked") or entry.get("naf_atoms") or []
+            naf_labels = [_atom_to_label(a) for a in naf_checked if a]
 
             line = f"  - Udowodniono: **{atom_label}**"
             if body_labels:
                 line += f"\n    bo: {'; '.join(body_labels)}"
+            if naf_labels:
+                line += f"\n    brak: {'; '.join(naf_labels)}"
             lines.append(line)
         return "\n".join(lines)
 
-    # Fallback: jeśli dag pusty, użyj steps
+    # Fallback: proof_dag pusty — użyj ProofStep z used_fact_ids
     if not proof_run.steps:
         return f"Wynik: {proof_run.result}"
 
@@ -348,8 +396,77 @@ def _render_proof_steps(proof_run: "ProofRun") -> str:
             continue
         rule_name = step.rule_id.split(".")[-1].upper()
         rule_label = _PREDICATE_PL.get(rule_name, step.rule_id)
+
+        # Mapuj used_fact_ids na czytelne etykiety faktów
+        premise_labels: list[str] = []
+        for fid in step.used_fact_ids:
+            f = fact_index.get(fid)
+            if f:
+                premise_labels.append(_PREDICATE_PL.get(f.predicate, f.predicate))
+
         subst_parts = [f"{k}={v}" for k, v in step.substitution.items()]
         subst_str = ", ".join(subst_parts)
-        lines.append(f"  - Reguła: {rule_label}" +
-                     (f" (podstawienie: {subst_str})" if subst_str else ""))
+
+        line = f"  - Reguła: {rule_label}"
+        if subst_str:
+            line += f" (podstawienie: {subst_str})"
+        if premise_labels:
+            line += f"\n    przesłanki: {'; '.join(premise_labels)}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _render_neural_trace(
+    neural_trace: dict[str, list[NeuralTraceItem]],
+    facts: list[Fact],
+    entity_map: dict[str, str],
+) -> str:
+    """
+    Renderuje ślad neuronalny — top-k wpływów message-passing per fakt docelowy.
+
+    Format per fakt:
+      [Nazwa faktu]
+        + typ_krawędzi: klaster (encja), krok N  <- wpływ zwiększający P(T)
+        - typ_krawędzi: klaster (encja), krok N  <- wpływ zmniejszający P(T)
+
+    neural_trace: dict[target_fact_id, list[NeuralTraceItem]] (posortowane wg magnitude)
+    """
+    fact_index: dict[str, Fact] = {f.fact_id: f for f in facts}
+    lines: list[str] = []
+
+    for fact_id, trace_items in neural_trace.items():
+        if not trace_items:
+            continue
+        fact = fact_index.get(fact_id)
+        fact_label = _PREDICATE_PL.get(fact.predicate, fact.predicate) if fact else fact_id
+
+        item_lines: list[str] = []
+        for item in trace_items[:3]:  # top-3 na fakt (zeby nie zasmiecac promptu)
+            delta_T = item.delta_logits.get("T", 0.0)
+            direction = "+" if delta_T >= 0 else "-"
+
+            if item.from_cluster_id:
+                # format: "{cluster_name}:{entity_id}"
+                cluster_name, _, entity_id = item.from_cluster_id.partition(":")
+                cluster_label = _CLUSTER_PL.get(cluster_name, cluster_name)
+                entity_name = entity_map.get(entity_id, entity_id)
+                item_lines.append(
+                    f"    {direction} {item.edge_type}: {cluster_label} ({entity_name}), krok {item.step}"
+                )
+            elif item.from_fact_id:
+                src_fact = fact_index.get(item.from_fact_id)
+                src_label = (
+                    _PREDICATE_PL.get(src_fact.predicate, src_fact.predicate)
+                    if src_fact else item.from_fact_id
+                )
+                item_lines.append(
+                    f"    {direction} {item.edge_type}: <- {src_label}, krok {item.step}"
+                )
+
+        if item_lines:
+            lines.append(f"  [{fact_label}]")
+            lines.extend(item_lines)
+
+    if not lines:
+        return "Brak danych sledowych z sieci neuronowej."
     return "\n".join(lines)

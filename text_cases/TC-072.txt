@@ -1,0 +1,5 @@
+Kazimierz Błaszczyk złożył zamówienie O172 dnia 6 marca 2026 na biżuterię (produkt fizyczny PROD172) za kwotę 4 500,00 zł. Po złożeniu zamówienia bank klienta zainicjował chargeback (chargeback_status=OPEN) z poprzedniej transakcji w sklepie, co automatycznie skutkowało blokadą konta A1720 (account_status=BLOCKED).
+
+Sklep JewelShop Sp. z o.o. wstrzymał realizację zamówienia O172 do rozstrzygnięcia chargebacku.
+
+Klient twierdzi, że chargeback był niesłuszny.

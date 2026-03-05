@@ -1,0 +1,5 @@
+Mirosław Kaczmarek (konsument) złożył zamówienie O181 dnia 20 lutego 2026 na rower (produkt fizyczny PROD181) za kwotę 2 500,00 zł. Klient zapłacił kartą kredytową (PAY181). Następnie bank cofnął autoryzację płatności (reverse) po wykryciu podejrzanej aktywności.
+
+Sklep BikeWorld Sp. z o.o. nie wysłał towaru wobec braku potwierdzenia płatności. Klient wyjaśnił sytuację z bankiem, który przywrócił płatność.
+
+Sklep zobowiązał się zrealizować zamówienie po potwierdzeniu płatności. Towar wysłano z opóźnieniem 5 dni.

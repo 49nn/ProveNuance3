@@ -1,0 +1,5 @@
+Przedsiębiorstwo VWX Sp. z o.o. (klient biznesowy) złożyło zamówienie O145 dnia 20 lutego 2026 na oprogramowanie ERP (produkt cyfrowy PROD145). Sklep ERPSoft Sp. z o.o. przyjął zamówienie 20 lutego 2026. Klient zapłacił przelewem (PAY145) kwotę 80 000,00 zł.
+
+Sklep uzyskał zgodę na natychmiastowe wykonanie umowy (digital_consent=YES). Oprogramowanie zostało zainstalowane (download_started_flag=YES). Po 2 tygodniach okazało się, że system ma krytyczny błąd (defective=YES). Klient złożył oświadczenie o odstąpieniu (STMT145) dnia 6 marca 2026.
+
+Sklep odrzucił żądanie zwrotu, proponując naprawę błędu.

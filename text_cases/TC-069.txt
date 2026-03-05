@@ -1,0 +1,5 @@
+Ryszard Kasprzak złożył zamówienie O169 dnia 4 marca 2026 na oprogramowanie (produkt cyfrowy PROD169). Jego konto A1690 jest aktywne (account_status=ACTIVE). Klient zakupił licencję i udostępnił klucz aktywacyjny współpracownikowi (password_shared=YES) wbrew regulaminowi.
+
+Sklep SoftwareLab Sp. z o.o. wykrył nieautoryzowane użycie i zablokował konto (account_status=BLOCKED). Sklep odmówił dalszego świadczenia usług.
+
+Klient kwestionuje decyzję.

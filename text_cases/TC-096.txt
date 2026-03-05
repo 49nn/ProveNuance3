@@ -1,0 +1,5 @@
+Aldona Kowalczyk (konsument) złożyła zamówienie O196 dnia 5 marca 2026 na telewizor (produkt fizyczny PROD196) za kwotę 3 100,00 zł. Sklep TVShop Sp. z o.o. przyjął zamówienie i potwierdził dostawę na 10 marca 2026.
+
+Towar nie dotarł do klientki (DEL196 – brak dostawy). Kurier poinformował, że paczka zaginęła w transporcie. Klientka złożyła oświadczenie o odstąpieniu (STMT196) dnia 20 marca 2026. Klientka żąda zwrotu 3 100,00 zł (PAY196) i odszkodowania.
+
+Sklep wszczął postępowanie reklamacyjne z kurierem.

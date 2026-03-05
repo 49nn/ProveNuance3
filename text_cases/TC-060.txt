@@ -1,0 +1,5 @@
+Urszula Grabowska (konsument) złożyła zamówienie O160 dnia 11 lutego 2026 na buty (produkt fizyczny PROD160) za kwotę 150,00 zł. Klientka zastosowała kupon MIN200 (20% rabatu, coupon_stackable=YES), który wymaga minimalnej wartości zamówienia 200,00 zł.
+
+Sklep Obuwie Sp. z o.o. odrzucił kupon, ponieważ wartość zamówienia 150,00 zł nie spełnia wymogu minimalnej kwoty 200,00 zł.
+
+Klientka jest niezadowolona. Sklep prawidłowo odmówił zastosowania kuponu.

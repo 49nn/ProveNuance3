@@ -1,0 +1,5 @@
+Andrzej Piwowarski (konsument) złożył zamówienie O178 dnia 14 lutego 2026 na buty (produkt fizyczny PROD178) za kwotę 280,00 zł. Klient zapłacił BLIKiem (PAY178). Transakcja została zautoryzowana, jednak sklep twierdzi, że środków nie otrzymał.
+
+Klient przedstawił potwierdzenie z aplikacji bankowej. Sklep FootShop Sp. z o.o. twierdzi, że płatność nie wpłynęła na konto.
+
+Sprawa jest wyjaśniana z operatorem płatności. Towar nie został wysłany do czasu wyjaśnienia.

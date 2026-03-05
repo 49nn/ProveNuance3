@@ -1,0 +1,5 @@
+Andrzej Malik (konsument) złożył zamówienie O192 dnia 13 lutego 2026 na AGD (produkt fizyczny PROD192) za kwotę 2 200,00 zł. Klient zapłacił kartą (PAY192). Sklep HomeKing Sp. z o.o. nie wysłał zamówienia w ciągu 14 dni.
+
+Dnia 27 lutego 2026 klient złożył oświadczenie o odstąpieniu (STMT192) z powodu niewykonania umowy przez sklep. Sklep jednocześnie zablokował konto klienta A1920 (account_status=BLOCKED) twierdząc zaległości z innej transakcji.
+
+Klient oczekuje zwrotu 2 200,00 zł i odblokowania konta.

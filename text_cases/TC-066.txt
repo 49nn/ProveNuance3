@@ -1,0 +1,5 @@
+Elżbieta Kwiatkowska złożyła zamówienie O166 dnia 1 marca 2026 na AGD (produkt fizyczny PROD166). Jej konto A1660 ma status BLOCKED ze względu na wcześniejsze nieuregulowane należności (account_status=BLOCKED).
+
+Sklep HomeAppliances Sp. z o.o. zablokował przetwarzanie zamówienia automatycznie. Klientka nie dokonała płatności. Towar nie został wysłany.
+
+Klientka kwestionuje blokadę, twierdząc że spłaciła zadłużenie, jednak blokada nie została jeszcze zniesiona.

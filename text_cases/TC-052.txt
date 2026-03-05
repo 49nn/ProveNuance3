@@ -1,0 +1,5 @@
+Celina Wierzbicka (konsument) złożyła zamówienie O152 dnia 19 stycznia 2026 na kurs video online (produkt cyfrowy PROD152). Sklep VideoLearn Sp. z o.o. przyjął zamówienie 19 stycznia 2026. Klientka zapłaciła kartą (PAY152) kwotę 299,00 zł.
+
+Sklep uzyskał zgodę (digital_consent=YES). Klientka obejrzała kurs w całości (download_started_flag=YES). Następnie otworzył chargeback (chargeback_status=OPEN), twierdząc że treść kursu nie odpowiadała opisowi.
+
+Bank rozpatrzył spór na korzyść sklepu (chargeback_status=RESOLVED_STORE) – klientka skorzystała z produktu cyfrowego po wyrażeniu zgody.

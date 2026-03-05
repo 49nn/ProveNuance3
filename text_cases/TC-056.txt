@@ -1,0 +1,5 @@
+Klaudia Bąk (konsument) złożyła zamówienie O156 dnia 3 lutego 2026 na odzież sportową (produkt fizyczny PROD156) za kwotę 400,00 zł. Do zamówienia zastosowała kupon SPORT10 (10% rabatu, coupon_stackable=YES). Kupon spełnia wymogi: wartość zamówienia przekracza 200,00 zł.
+
+Sklep SportWear Sp. z o.o. przyjął zamówienie i zastosował rabat 40,00 zł. Klientka zapłaciła kartą (PAY156) kwotę 360,00 zł dnia 3 lutego 2026.
+
+Transakcja przebiegła prawidłowo.

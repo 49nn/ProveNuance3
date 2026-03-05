@@ -1,0 +1,5 @@
+Ewa Jabłońska (konsument) złożyła zamówienie O117 dnia 5 lutego 2026 na lampę stojącą (produkt fizyczny PROD117). Sklep Oświetlenie Sp. z o.o. przyjął zamówienie 5 lutego 2026. Klientka zapłaciła BLIKiem (PAY117) kwotę 345,00 zł.
+
+Towar dostarczono (DEL117) dnia 10 lutego 2026. Klientka złożyła oświadczenie o odstąpieniu (STMT117) dnia 28 lutego 2026 – 18 dni po dostawie, po upływie ustawowego terminu 14-dniowego.
+
+Sklep odmówił przyjęcia zwrotu z powodu przekroczenia terminu. Klientka kwestionuje decyzję.

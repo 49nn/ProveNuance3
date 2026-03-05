@@ -1,0 +1,5 @@
+Walenty Baran (konsument) złożył zamówienie O1007 dnia 16 marca 2026 na gitarę elektryczną (produkt fizyczny PROD1007) za kwotę 3 400,00 zł. Sklep MusicPro Sp. z o.o. przyjął zamówienie. Klient zapłacił kartą (PAY1007).
+
+Towar dostarczono (DEL1007) dnia 21 marca 2026. Gitara jest sprawna, jednak klient zmienił zdanie i złożył oświadczenie o odstąpieniu (STMT1007) dnia 26 marca 2026 – 5 dni po dostawie. Towar bez śladów użytkowania.
+
+Sklep przyjął zwrot. Klient oczekuje zwrotu 3 400,00 zł.

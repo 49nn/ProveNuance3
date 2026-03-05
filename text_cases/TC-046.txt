@@ -1,0 +1,5 @@
+Lidia Kowalska (konsument) złożyła zamówienie O146 dnia 5 stycznia 2026 na perfumy (produkt fizyczny PROD146). Sklep Perfumeria Sp. z o.o. przyjął zamówienie 5 stycznia 2026. Klientka zapłaciła kartą (PAY146) kwotę 280,00 zł.
+
+Towar nie dotarł mimo upływu 30 dni (DEL146 – brak dostawy). Klientka wielokrotnie kontaktowała się ze sklepem bez skutku. Klientka otworzyła procedurę chargeback w swoim banku (chargeback_status=OPEN) dnia 10 lutego 2026.
+
+Bank rozpatrzył spór na korzyść klientki (chargeback_status=RESOLVED_CUSTOMER). Sklep jest zobowiązany do zwrotu 280,00 zł.

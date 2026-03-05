@@ -1,0 +1,5 @@
+Damian Kowalczyk (konsument) złożył zamówienie O130 dnia 10 stycznia 2026 na grę komputerową (produkt cyfrowy PROD130). Sklep GameZone Sp. z o.o. przyjął zamówienie 10 stycznia 2026. Klient zapłacił kartą (PAY130) kwotę 199,00 zł.
+
+Sklep uzyskał zgodę klienta na natychmiastowe wykonanie umowy (digital_consent=YES). Klient natychmiast pobrał grę i aktywował klucz (download_started_flag=YES). Klient złożył oświadczenie o odstąpieniu (STMT130) dnia 11 stycznia 2026, twierdząc że gra nie działa poprawnie.
+
+Sklep odmówił zwrotu – pobieranie nastąpiło po wyrażeniu zgody. Klient kwestionuje i otwiera chargeback.

@@ -1,0 +1,5 @@
+Grzegorz Szymański (konsument) złożył zamówienie O134 dnia 18 stycznia 2026 na mapę nawigacyjną do GPS (produkt cyfrowy PROD134). Sklep NaviStore Sp. z o.o. przyjął zamówienie 18 stycznia 2026. Klient zapłacił przelewem (PAY134) kwotę 89,00 zł.
+
+Sklep uzyskał zgodę na natychmiastowe wykonanie umowy (digital_consent=YES). Mapa nie pobrała się z powodu błędu serwera (download_started_flag=NO – wina sklepu). Klient złożył oświadczenie o odstąpieniu (STMT134) dnia 20 stycznia 2026.
+
+Klient oczekuje zwrotu 89,00 zł. Sklep przyznał błąd serwera i zgodził się zwrócić środki.

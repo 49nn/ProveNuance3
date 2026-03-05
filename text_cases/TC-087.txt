@@ -1,0 +1,5 @@
+Wiesław Kubiak (konsument) złożył zamówienie O187 dnia 3 lutego 2026 na pakiet oprogramowania do zarządzania projektami (produkt cyfrowy PROD187). Sklep ProjektApp Sp. z o.o. przyjął zamówienie. Klient zapłacił kartą (PAY187) kwotę 850,00 zł.
+
+Sklep uzyskał zgodę (digital_consent=YES). Klient zainstalował oprogramowanie i udostępnił dane dostępowe 3 współpracownikom (password_shared=YES). Klient złożył chargeback (chargeback_status=OPEN) twierdząc, że oprogramowanie nie działa.
+
+Bank rozstrzygnął na korzyść sklepu (chargeback_status=RESOLVED_STORE) – klient korzystał z oprogramowania i udostępniał je.

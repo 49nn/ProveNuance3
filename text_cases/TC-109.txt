@@ -1,0 +1,5 @@
+Józef Lis (konsument) złożył zamówienie O1009 dnia 18 marca 2026 na pompę ciepła (produkt fizyczny PROD1009) za kwotę 25 000,00 zł. Sklep EcoHeat Sp. z o.o. przyjął zamówienie. Klient zapłacił przelewem (PAY1009).
+
+Towar dostarczono i zainstalowano (DEL1009) dnia 25 marca 2026 przez ekipę sklepu. Po instalacji klient zmienił zdanie i złożył oświadczenie o odstąpieniu (STMT1009) dnia 26 marca 2026 – 1 dzień po instalacji.
+
+Sklep odmówił – produkt zainstalowany w nieruchomości jest wyłączony z prawa do odstąpienia. Klient kwestionuje.

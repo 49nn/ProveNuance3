@@ -1,0 +1,5 @@
+Marcin Wróbel (konsument) złożył zamówienie O159 dnia 9 lutego 2026 na sprzęt kuchenny (produkt fizyczny PROD159) za kwotę 500,00 zł. Do zamówienia zastosował kupon SAVE50 (50 zł rabatu, coupon_stackable=NO) oraz kupon FREE10 (10% rabatu, coupon_stackable=NO).
+
+Sklep KuchniaMax Sp. z o.o. odmówił zastosowania obu kuponów jednocześnie – oba mają coupon_stackable=NO. Klient może wybrać tylko jeden.
+
+Klient wybrał kupon SAVE50 jako korzystniejszy.

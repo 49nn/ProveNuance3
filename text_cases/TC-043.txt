@@ -1,0 +1,5 @@
+Spółka PQR Sp. z o.o. (klient biznesowy) złożyła zamówienie O143 dnia 16 lutego 2026 na urządzenie przemysłowe (produkt fizyczny PROD143). Sklep IndustrialPro Sp. z o.o. przyjął zamówienie 16 lutego 2026. Klient zapłacił przelewem (PAY143) kwotę 120 000,00 zł.
+
+Towar dostarczono (DEL143) dnia 1 marca 2026. Urządzenie nie spełnia parametrów technicznych wskazanych w specyfikacji (defective=YES). Klient złożył oświadczenie o odstąpieniu (STMT143) dnia 3 marca 2026.
+
+Sklep zaproponował naprawę lub wymianę podzespołu. Klient żąda zwrotu całości ceny i odszkodowania za przestój.

@@ -1,0 +1,5 @@
+Tomasz Dąbrowski (konsument) złożył zamówienie O118 dnia 8 lutego 2026 na rower górski (produkt fizyczny PROD118). Sklep Rower24 Sp. z o.o. przyjął zamówienie 8 lutego 2026. Klient zapłacił przelewem (PAY118) kwotę 2 400,00 zł dnia 9 lutego 2026.
+
+Towar dostarczono (DEL118) dnia 14 lutego 2026. Klient złożył oświadczenie o odstąpieniu (STMT118) dnia 2 marca 2026 – 16 dni po dostawie. Termin 14-dniowy upłynął 28 lutego 2026.
+
+Sklep odmówił przyjęcia zwrotu. Klient twierdzi, że termin liczył od dnia zamówienia, nie dostawy.

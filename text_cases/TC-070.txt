@@ -1,0 +1,5 @@
+Ireneusz Pawlak złożył wniosek o reaktywację konta A1700, które zostało zablokowane (account_status=BLOCKED) dnia 15 lutego 2026 z powodu niezapłaconej faktury za zamówienie O1699.
+
+Klient uregulował zaległość (PAY170) przelewem w kwocie 320,00 zł dnia 2 marca 2026. Sklep MegaStore Sp. z o.o. zweryfikował wpłatę i reaktywował konto (account_status=ACTIVE) dnia 4 marca 2026.
+
+Klient może ponownie dokonywać zakupów.

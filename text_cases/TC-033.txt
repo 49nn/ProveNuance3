@@ -1,0 +1,5 @@
+Aleksandra Krawczyk (konsument) złożyła zamówienie O133 dnia 16 stycznia 2026 na dostęp do platformy e-learningowej (produkt cyfrowy PROD133). Sklep LearnNow Sp. z o.o. przyjął zamówienie 16 stycznia 2026. Klientka zapłaciła kartą (PAY133) kwotę 399,00 zł.
+
+Sklep uzyskał zgodę (digital_consent=YES). Klientka udostępniła dane logowania współlokatorce (password_shared=YES), ale sama nie skorzystała z platformy (download_started_flag=NO). Klientka złożyła oświadczenie o odstąpieniu (STMT133) dnia 20 stycznia 2026.
+
+Sklep odmówił zwrotu z powodu nieautoryzowanego udostępnienia dostępu osobie trzeciej.

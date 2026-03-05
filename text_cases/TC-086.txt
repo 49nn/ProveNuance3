@@ -1,0 +1,3 @@
+Beata Adamczyk (konsument) złożyła zamówienie O186 dnia 1 lutego 2026 na ekspres ciśnieniowy (produkt fizyczny PROD186). Sklep CoffeeWorld Sp. z o.o. przyjął zamówienie. Klientka zapłaciła kartą (PAY186) kwotę 1 250,00 zł.
+
+Towar dostarczono (DEL186) dnia 6 lutego 2026. Ekspres był wadliwy (defective=YES) – nie grzał wody. Klientka złożyła oświadczenie o odstąpieniu (STMT186) dnia 8 lutego 2026. Sklep odrzucił reklamację. Klientka otworzyła chargeback (chargeback_status=OPEN). Bank rozstrzygnął na korzyść klientki (chargeback_status=RESOLVED_CUSTOMER).

@@ -1,0 +1,5 @@
+Joanna Lewandowska (konsument) złożyła zamówienie O115 dnia 1 lutego 2026 na buty do biegania (produkt fizyczny PROD115). Sklep Sport24 Sp. z o.o. przyjął zamówienie 1 lutego 2026. Klientka zapłaciła kartą (PAY115) kwotę 390,00 zł.
+
+Towar dostarczono (DEL115) dnia 6 lutego 2026. Klientka stwierdziła, że podeszwa jest wadliwa (defective=YES). Dnia 10 lutego 2026 złożyła oświadczenie o odstąpieniu (STMT115) z powodu wady. Towar odesłano (RS115) 11 lutego 2026.
+
+Klientka oczekuje pełnego zwrotu oraz pokrycia kosztu odesłania przez sklep.

@@ -1,0 +1,5 @@
+Weronika Dudek (konsument) złożyła zamówienie O162 dnia 15 lutego 2026 na zabawki (produkt fizyczny PROD162) za kwotę 600,00 zł. Do zamówienia zastosowała kupon KIDS10 (10% rabatu, coupon_stackable=YES) oraz kupon SUMMER20 (20% rabatu, coupon_stackable=YES).
+
+Sklep ToyLand Sp. z o.o. zastosował oba kupony łącznie (30% rabatu = 180,00 zł). Klientka zapłaciła kartą (PAY162) kwotę 420,00 zł.
+
+Transakcja przebiegła prawidłowo.

@@ -1,0 +1,3 @@
+Benedykt Woźniak (konsument) złożył zamówienie O155 dnia 25 stycznia 2026 na kamerę sportową (produkt fizyczny PROD155). Sklep ActionCam Sp. z o.o. przyjął zamówienie 25 stycznia 2026. Klient zapłacił kartą (PAY155) kwotę 1 350,00 zł.
+
+Towar nie dotarł (DEL155 – brak dostawy). Sklep podał fałszywy numer śledzenia przesyłki. Klient otworzył chargeback (chargeback_status=OPEN). Dochodzenie potwierdziło nieuczciwe działanie sklepu. Bank zwrócił środki (chargeback_status=RESOLVED_CUSTOMER). Sprawa skierowana do organów ścigania.

@@ -1,0 +1,3 @@
+Zbigniew Kłos (konsument) złożył zamówienie O1003 dnia 12 marca 2026 na kurs językowy online (produkt cyfrowy PROD1003) za kwotę 800,00 zł. Sklep LangSchool Sp. z o.o. nie uzyskał zgody na natychmiastowe wykonanie umowy (digital_consent=NO). Klient obejrzał 3 pierwsze lekcje (download_started_flag=YES). Klient złożył oświadczenie o odstąpieniu (STMT1003) dnia 18 marca 2026.
+
+Sklep kwestionuje prawo do zwrotu, jednak brak właściwej zgody osłabia pozycję sklepu. Sprawa sporna.

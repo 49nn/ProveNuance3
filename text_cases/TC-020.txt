@@ -1,0 +1,5 @@
+Marek Kowalski (konsument) złożył zamówienie O120 dnia 12 lutego 2026 na ekspres do kawy (produkt fizyczny PROD120). Sklep Kawa&Herbata Sp. z o.o. przyjął zamówienie 12 lutego 2026. Klient zapłacił COD (PAY120) – kwota 850,00 zł.
+
+Towar nie dotarł do klienta w obiecanym terminie (DEL120 – brak dostawy). Kurier nie zastał klienta i zostawił awizo, lecz paczka przepadła w magazynie kurierskim. Klient anulował zamówienie i żąda zwrotu pieniędzy.
+
+Klient nie dokonał płatności COD, gdyż towar nie dotarł. Sklep obciąża kosztami nieudanej dostawy.

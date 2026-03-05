@@ -1,0 +1,5 @@
+Monika Piotrowska (konsument) złożyła zamówienie O194 dnia 1 marca 2026 na odkurzacz (produkt fizyczny PROD194). Sklep CleanMax Sp. z o.o. przyjął zamówienie 1 marca 2026. Klientka zapłaciła kartą (PAY194) 650,00 zł.
+
+Towar dostarczono (DEL194) dnia 6 marca 2026. Klientka złożyła oświadczenie o odstąpieniu (STMT194) dnia 13 marca 2026 – w przedostatnim dniu (13. dzień terminu 14-dniowego). Towar odesłano tego samego dnia (RS194).
+
+Klientka oczekuje zwrotu 650,00 zł. Odstąpienie złożone w terminie.

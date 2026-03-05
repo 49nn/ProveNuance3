@@ -1,0 +1,5 @@
+Paulina Lis (konsument) złożyła zamówienie O131 dnia 12 stycznia 2026 na subskrypcję miesięczną serwisu streamingowego (produkt cyfrowy PROD131). Sklep StreamMax Sp. z o.o. przyjął zamówienie 12 stycznia 2026. Klientka zapłaciła kartą (PAY131) kwotę 49,99 zł.
+
+Sklep uzyskał zgodę na natychmiastowe wykonanie umowy (digital_consent=YES). Klientka zalogowała się i obejrzała kilka filmów (download_started_flag=YES). Klientka złożyła oświadczenie o odstąpieniu (STMT131) dnia 14 stycznia 2026 – po 2 dniach.
+
+Sklep odmówił zwrotu na podstawie wyrażonej zgody i faktycznego korzystania z usługi.

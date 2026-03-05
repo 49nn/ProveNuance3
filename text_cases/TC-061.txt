@@ -1,0 +1,5 @@
+Feliks Szymańczyk (konsument) złożył zamówienie O161 dnia 13 lutego 2026 na sprzęt foto (produkt fizyczny PROD161) za kwotę 800,00 zł. Klient zastosował kupon FOTO15 (15% rabatu, coupon_stackable=YES), który wygasł dnia 31 stycznia 2026.
+
+Sklep FotoMaster Sp. z o.o. odrzucił kupon jako przeterminowany. Klient zapłacił pełną kwotę kartą (PAY161) 800,00 zł.
+
+Transakcja prawidłowa – przeterminowany kupon słusznie odrzucony.

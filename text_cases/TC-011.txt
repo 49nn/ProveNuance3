@@ -1,0 +1,5 @@
+Anna Wiśniewska (konsument) złożyła zamówienie O111 dnia 2 stycznia 2026 na kurtkę zimową (produkt fizyczny PROD111). Sklep Moda Sp. z o.o. przyjął zamówienie tego samego dnia. Klientka zapłaciła przelewem bankowym (PAY111) kwotę 480,00 zł dnia 3 stycznia 2026.
+
+Towar dostarczono kurierem (DEL111) dnia 8 stycznia 2026. Dnia 18 stycznia 2026 klientka złożyła pisemne oświadczenie o odstąpieniu od umowy (STMT111) w terminie 14-dniowym. Towar odesłano przesyłką zwrotną (RS111) dnia 19 stycznia 2026 i dotarł do sklepu 21 stycznia 2026.
+
+Klientka oczekuje zwrotu 480,00 zł przelewem.

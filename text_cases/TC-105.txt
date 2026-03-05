@@ -1,0 +1,5 @@
+Remigiusz Szewczyk (konsument) złożył zamówienie O1005 dnia 14 marca 2026 na motor elektryczny (produkt fizyczny PROD1005) za kwotę 12 000,00 zł. Sklep eMotor Sp. z o.o. przyjął zamówienie. Klient zapłacił kartą (PAY1005).
+
+Towar dostarczono (DEL1005) dnia 20 marca 2026. Motor ma fabryczną wadę silnika (defective=YES). Klient złożył oświadczenie o odstąpieniu (STMT1005) dnia 22 marca 2026. Sklep zaproponował wymianę silnika zamiast zwrotu.
+
+Klient odrzucił propozycję i żąda zwrotu całości kwoty.

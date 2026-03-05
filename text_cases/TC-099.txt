@@ -1,0 +1,5 @@
+Mieczysław Sikora (konsument) złożył zamówienie O199 dnia 8 marca 2026 na lodówkę (produkt fizyczny PROD199) za kwotę 2 800,00 zł. Sklep AppliancePro Sp. z o.o. przyjął zamówienie. Klient zapłacił kartą (PAY199).
+
+Towar dostarczono (DEL199) dnia 13 marca 2026. Lodówka była wadliwa – nie chłodziła (defective=YES). Klient złożył oświadczenie o odstąpieniu (STMT199) dnia 14 marca 2026. Sklep zaproponował wyłącznie naprawę, odmawiając zwrotu pieniędzy.
+
+Klient nalega na zwrot i kieruje sprawę do Inspekcji Handlowej.

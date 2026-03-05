@@ -1,0 +1,5 @@
+Firma MNO S.A. (klient biznesowy) złożyła zamówienie O142 dnia 14 lutego 2026 na 100 sztuk uniform roboczych z logo firmy (produkt fizyczny, wykonanie na zamówienie PROD142). Sklep Ubrania Na Miarę Sp. z o.o. przyjął zamówienie 14 lutego 2026. Klient zapłacił przelewem (PAY142) kwotę 18 000,00 zł.
+
+Towar dostarczono (DEL142) dnia 5 marca 2026. Klient złożył oświadczenie o odstąpieniu (STMT142) dnia 6 marca 2026, twierdząc że zamówił inny kolor logo.
+
+Sklep odmówił – produkt wykonany na zamówienie, spersonalizowany. Klient nie ma prawa do zwrotu.

@@ -1,0 +1,5 @@
+Maria Kowalczyk (konsument) złożyła zamówienie O113 dnia 7 stycznia 2026 na odkurzacz (produkt fizyczny PROD113). Sklep AGD Plus Sp. z o.o. przyjął zamówienie 7 stycznia 2026. Klientka zapłaciła BLIKiem (PAY113) kwotę 699,00 zł dnia 7 stycznia 2026.
+
+Towar dostarczono (DEL113) dnia 12 stycznia 2026. Klientka złożyła oświadczenie o odstąpieniu (STMT113) dnia 22 stycznia 2026 – 10 dni po dostawie. Towar odesłano (RS113) dnia 23 stycznia 2026.
+
+Klientka oczekuje zwrotu 699,00 zł.

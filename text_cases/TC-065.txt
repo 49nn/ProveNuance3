@@ -1,0 +1,5 @@
+Borys Kowalczyk (konsument) złożył zamówienie O165 dnia 21 lutego 2026 na elektronikę za kwotę 2 000,00 zł (produkt fizyczny PROD165). Klient zastosował kupon VIPCLUB (20% rabatu, coupon_stackable=YES), dostępny tylko dla klientów VIP. Klient posiada status VIP.
+
+Sklep ElektroVIP Sp. z o.o. zastosował rabat 400,00 zł. Klient zapłacił przelewem (PAY165) kwotę 1 600,00 zł.
+
+Transakcja przebiegła prawidłowo.

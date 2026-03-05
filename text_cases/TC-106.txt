@@ -1,0 +1,5 @@
+Celestyna Babicz (konsument) złożyła zamówienie O1006 dnia 15 marca 2026 na akcesoria do telefonu (produkt fizyczny PROD1006) za kwotę 120,00 zł. Sklep PhoneGear Sp. z o.o. przyjął zamówienie. Klientka zapłaciła BLIKiem (PAY1006).
+
+Towar dostarczono (DEL1006) dnia 19 marca 2026. Klientka złożyła oświadczenie o odstąpieniu (STMT1006) dnia 2 kwietnia 2026 – 14 dni po dostawie, w ostatnim dopuszczalnym dniu. Towar odesłano (RS1006).
+
+Sklep zobowiązany do zwrotu 120,00 zł. Sprawa w toku.

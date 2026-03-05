@@ -1,0 +1,5 @@
+Dorota Wiśniewska (konsument) złożyła zamówienie O189 dnia 7 lutego 2026 na odzież sportową (produkt fizyczny PROD189) za kwotę 600,00 zł. Zastosowała kupon FIT20 (20% rabatu, coupon_stackable=YES) i kupon SPORT10 (10% rabatu, coupon_stackable=YES). Po rabacie 30% zapłaciła 420,00 zł kartą (PAY189).
+
+Towar dostarczono (DEL189) dnia 12 lutego 2026. Klientka złożyła oświadczenie o odstąpieniu (STMT189) dnia 20 lutego 2026. Sklep RunStore Sp. z o.o. zwrócił 420,00 zł.
+
+Klientka oczekiwała zwrotu 600,00 zł – kwoty przed rabatem. Sklep wyjaśnił, że zwrot następuje na kwotę faktycznie zapłaconą.

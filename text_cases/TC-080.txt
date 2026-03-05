@@ -1,0 +1,5 @@
+Grzegorz Adamski (konsument) złożył zamówienie O180 dnia 18 lutego 2026 na monitor (produkt fizyczny PROD180) za kwotę 1 400,00 zł. Klient wybrał przelew bankowy (PAY180). Termin płatności to 3 dni od zamówienia.
+
+Klient przelał środki z opóźnieniem – dnia 25 lutego 2026, 4 dni po terminie. Sklep TechMonitor Sp. z o.o. anulował zamówienie O180 dnia 23 lutego 2026 z powodu braku płatności.
+
+Klient żąda realizacji zamówienia po dokonaniu spóźnionej płatności.

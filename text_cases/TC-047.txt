@@ -1,0 +1,5 @@
+Jacek Wróblewski (konsument) złożył zamówienie O147 dnia 8 stycznia 2026 na słuchawki bezprzewodowe (produkt fizyczny PROD147). Sklep AudioShop Sp. z o.o. przyjął zamówienie 8 stycznia 2026. Klient zapłacił kartą (PAY147) kwotę 450,00 zł.
+
+Towar dostarczono (DEL147) dnia 13 stycznia 2026. Klient twierdzi, że w paczce był inny produkt. Sklep twierdzi, że wysłał właściwy towar. Klient otworzył chargeback (chargeback_status=OPEN) dnia 20 stycznia 2026.
+
+Bank rozpatrzył spór na korzyść sklepu (chargeback_status=RESOLVED_STORE). Klient nie dostarczył dowodów błędnej wysyłki.

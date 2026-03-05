@@ -1,0 +1,5 @@
+Przedsiębiorstwo XYZ S.A. (klient biznesowy) złożyło zamówienie O138 dnia 5 lutego 2026 na serwer rack (produkt fizyczny PROD138). Sklep DataCentre Sp. z o.o. przyjął zamówienie 5 lutego 2026. Klient zapłacił przelewem (PAY138) kwotę 35 000,00 zł.
+
+Towar dostarczono (DEL138) dnia 12 lutego 2026. Serwer okazał się wadliwy – nie uruchamia się (defective=YES). Firma XYZ złożyła oświadczenie (STMT138) dnia 14 lutego 2026, żądając zwrotu.
+
+Sklep zaproponował naprawę gwarancyjną. Klient nalega na wymianę lub zwrot ceny.

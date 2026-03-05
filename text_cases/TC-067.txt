@@ -1,0 +1,5 @@
+Stanisław Marciniak złożył zamówienie O167 dnia 2 marca 2026 na laptop (produkt fizyczny PROD167). Jego konto A1670 ma status ACTIVE (account_status=ACTIVE). Klient zapłacił kartą (PAY167) kwotę 3 200,00 zł.
+
+Towar dostarczono (DEL167) dnia 7 marca 2026. Transakcja przebiegła prawidłowo.
+
+Brak sporu – referencyjny przypadek aktywnego konta z pomyślnym zakupem.

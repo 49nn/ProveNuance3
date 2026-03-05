@@ -1,0 +1,5 @@
+Olga Malinowska (konsument) złożyła zamówienie O1004 dnia 13 marca 2026 na odzież ciążową (produkt fizyczny PROD1004) za kwotę 420,00 zł. Sklep BabyAndMom Sp. z o.o. przyjął zamówienie. Klientka zapłaciła przelewem (PAY1004).
+
+Towar dostarczono (DEL1004) dnia 18 marca 2026. Klientka złożyła oświadczenie o odstąpieniu (STMT1004) dnia 30 marca 2026 – 12 dni po dostawie. Towar odesłano w oryginalnym opakowaniu (RS1004).
+
+Sklep przyjął zwrot i zobowiązał się zwrócić 420,00 zł w ciągu 14 dni.

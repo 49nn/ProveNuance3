@@ -1,0 +1,5 @@
+Firma STU Sp. z o.o. (klient biznesowy) złożyła zamówienie O144 dnia 18 lutego 2026 na 500 sztuk opakowań promocyjnych (produkt fizyczny PROD144). Sklep PackPro Sp. z o.o. przyjął zamówienie 18 lutego 2026. Klient zapłacił przelewem (PAY144) kwotę 12 000,00 zł.
+
+Towar dostarczono (DEL144) dnia 28 lutego 2026. Klient odmówił przyjęcia 200 sztuk z powodu wady druku (defective=YES). Sklep zaproponował rekompensatę 20% wartości partii.
+
+Klient żąda wymiany wszystkich wadliwych sztuk lub proporcjonalnego zwrotu kwoty.

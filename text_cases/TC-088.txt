@@ -1,0 +1,5 @@
+Firma RST S.A. (klient biznesowy) złożyła zamówienie O188 dnia 5 lutego 2026 na serwery sieciowe (produkt fizyczny PROD188) za 500 000,00 zł. Sklep NetworkPro Sp. z o.o. przyjął zamówienie. Klient zapłacił przelewem (PAY188).
+
+Towar dostarczono (DEL188) dnia 20 lutego 2026. Serwery nie spełniają parametrów technicznych (defective=YES). Klient złożył oświadczenie (STMT188) dnia 22 lutego 2026 i otworzył chargeback (chargeback_status=OPEN).
+
+Sprawa skierowana do sądu arbitrażowego. Chargeback w toku.

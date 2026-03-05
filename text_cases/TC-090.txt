@@ -1,0 +1,5 @@
+Zbigniew Nowak (konsument) złożył zamówienie O190 dnia 9 lutego 2026 na narzędzia ogrodowe (produkt fizyczny PROD190) za kwotę 400,00 zł. Wybrał COD. Towar dostarczono (DEL190) dnia 14 lutego 2026, klient zapłacił przy odbiorze.
+
+Narzędzia okazały się wadliwe – rączki pęknięte (defective=YES). Klient złożył oświadczenie o odstąpieniu (STMT190) dnia 16 lutego 2026. Sklep GardenTools Sp. z o.o. nie odpowiedział na reklamację przez 30 dni. Klient otworzył chargeback – jednak COD nie podlega procedurze chargeback.
+
+Klient skierował sprawę do Rzecznika Konsumentów.

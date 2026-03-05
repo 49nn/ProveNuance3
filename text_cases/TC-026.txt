@@ -1,0 +1,5 @@
+Łukasz Adamczyk (konsument) złożył zamówienie O126 dnia 1 stycznia 2026 na program graficzny (produkt cyfrowy PROD126). Sklep SoftwarePro Sp. z o.o. przyjął zamówienie 1 stycznia 2026. Klient zapłacił kartą (PAY126) kwotę 299,00 zł.
+
+Przed udostępnieniem pobierania sklep uzyskał wyraźną zgodę klienta na natychmiastowe wykonanie umowy i poinformował o utracie prawa do odstąpienia (digital_consent=YES). Klient nie rozpoczął pobierania (download_started_flag=NO). Klient złożył oświadczenie o odstąpieniu (STMT126) dnia 5 stycznia 2026.
+
+Klient oczekuje zwrotu 299,00 zł. Sklep kwestionuje prawo do zwrotu wskazując na udzieloną zgodę.

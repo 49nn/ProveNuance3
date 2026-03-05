@@ -1,0 +1,5 @@
+Waldemar Grabowski (konsument) złożył zamówienie O153 dnia 21 stycznia 2026 na sprzęt sportowy (produkt fizyczny PROD153). Sklep SportMax Sp. z o.o. przyjął zamówienie 21 stycznia 2026. Klient zapłacił kartą (PAY153) kwotę 750,00 zł.
+
+Klient otrzymał towar (DEL153) dnia 26 stycznia 2026. Klient próbował anulować zamówienie, ale sklep odrzucił. Klient otworzył chargeback (chargeback_status=OPEN) bez wcześniejszego złożenia oświadczenia o odstąpieniu.
+
+Sklep przedstawił dowód dostawy. Chargeback w trakcie rozpatrywania.

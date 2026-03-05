@@ -1,0 +1,5 @@
+Agnieszka Michalska (konsument) złożyła zamówienie O127 dnia 3 stycznia 2026 na audiobook (produkt cyfrowy PROD127). Sklep Czytaj&Słuchaj Sp. z o.o. przyjął zamówienie 3 stycznia 2026. Klientka zapłaciła BLIKiem (PAY127) kwotę 49,00 zł.
+
+Sklep uzyskał zgodę na natychmiastowe wykonanie umowy (digital_consent=YES). Klientka rozpoczęła pobieranie audiobooka (download_started_flag=YES). Następnie złożyła oświadczenie o odstąpieniu (STMT127) dnia 5 stycznia 2026, twierdząc że plik jest uszkodzony.
+
+Sklep odmówił zwrotu, wskazując że pobieranie zostało rozpoczęte. Klientka żąda zwrotu.

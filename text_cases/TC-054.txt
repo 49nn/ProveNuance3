@@ -1,0 +1,3 @@
+Irena Kowalczyk (konsument) złożyła zamówienie O154 dnia 23 stycznia 2026 na meble ogrodowe (produkt fizyczny PROD154). Sklep OgródPro Sp. z o.o. przyjął zamówienie 23 stycznia 2026. Klientka zapłaciła kartą (PAY154) kwotę 2 800,00 zł.
+
+Towar dostarczono (DEL154) dnia 5 lutego 2026. Klientka złożyła oświadczenie o odstąpieniu (STMT154) dnia 10 lutego 2026. Sklep opóźniał zwrot przez ponad miesiąc. Klientka otworzyła chargeback (chargeback_status=OPEN). Sklep dokonał zwrotu. Chargeback zamknięty na korzyść klientki (chargeback_status=RESOLVED_CUSTOMER).

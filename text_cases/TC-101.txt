@@ -1,0 +1,5 @@
+Leszek Markowski (konsument) złożył zamówienie O1001 dnia 10 marca 2026 na aparat słuchowy (produkt fizyczny PROD1001) za kwotę 5 800,00 zł. Sklep MedAudio Sp. z o.o. przyjął zamówienie. Klient zapłacił kartą (PAY1001).
+
+Towar dostarczono (DEL1001) dnia 15 marca 2026. Aparat jest dopasowany na miarę – produkt wykonany na zamówienie. Klient złożył oświadczenie o odstąpieniu (STMT1001) dnia 20 marca 2026, twierdząc że aparat nie pasuje.
+
+Sklep odmówił – produkt wykonany indywidualnie na zamówienie nie podlega zwrotowi.
