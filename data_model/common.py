@@ -26,8 +26,9 @@ TruthValue = Literal["T", "F", "U"]
 class Span(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    start: int = Field(ge=0)
-    end:   int = Field(ge=0)
+    start: int | None = Field(default=None, ge=0)
+    end:   int | None = Field(default=None, ge=0)
+    text:  str | None = None  # fragment tekstu źródłowego (text[start:end])
 
 
 # ---------------------------------------------------------------------------

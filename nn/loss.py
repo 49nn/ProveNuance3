@@ -38,13 +38,15 @@ def l_mask(
     total = torch.tensor(0.0, requires_grad=True)
 
     for cname, idx, k_true in masked_items:
-        if cname not in logits_cluster:
+        # logits_cluster może mieć klucze z prefiksem "c_" lub bez
+        key = cname if cname in logits_cluster else f"c_{cname}"
+        if key not in logits_cluster:
             continue
         schema = schema_by_name.get(cname)
         if schema is None:
             continue
         dim = schema.dim
-        logit_row = logits_cluster[cname][idx, :dim]  # [dim] — bez paddingu
+        logit_row = logits_cluster[key][idx, :dim]  # [dim] — bez paddingu
         log_p = F.log_softmax(logit_row, dim=-1)
         total = total - log_p[k_true]
 

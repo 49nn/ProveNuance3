@@ -1,0 +1,1 @@
+Barbara Kamińska złożyła zamówienie O109 na kwotę 150 zł dnia 1 marca 2026. Do zamówienia zastosowała dwa kupony rabatowe: SAVE10 oraz EXTRA5. Kupon SAVE10 ma warunek, że nie łączy się z innymi promocjami (coupon_stackable=NO). Kupon EXTRA5 wymaga minimalnej wartości koszyka 200 zł, a wartość zamówienia O109 wynosi 150 zł.

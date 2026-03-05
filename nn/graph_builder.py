@@ -19,6 +19,7 @@ import torch
 from torch_geometric.data import HeteroData
 
 if TYPE_CHECKING:
+    from data_model.common import Span
     from data_model.entity import Entity
     from data_model.fact import Fact
     from data_model.rule import Rule
@@ -48,10 +49,11 @@ class ClusterStateRow:
     """Wiersz z tabeli cluster_states (stan klastra dla jednej encji i przypadku)."""
     entity_id: str
     cluster_name: str
-    logits: list[float]   # FLOAT[] z DB; długość == dim klastra
+    logits: list[float]        # FLOAT[] z DB; długość == dim klastra
     is_clamped: bool
     clamp_hard: bool
-    clamp_source: str     # 'text' | 'memory' | 'manual'
+    clamp_source: str          # 'text' | 'memory' | 'manual'
+    source_span: "Span | None" = None  # fragment tekstu, z którego pochodzi clamp
 
 
 @dataclass

@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
-from data_model.common import RoleArg, Span, TruthDistribution
+from data_model.common import ProvenanceItem, RoleArg, Span, TruthDistribution
 from data_model.entity import Entity
 from data_model.fact import Fact, FactSource, FactStatus
 from nn.graph_builder import ClusterSchema, ClusterStateRow
@@ -94,8 +94,8 @@ def build_system_prompt(
 
     lines += [
         "Rola REASON przyjmuje literal_value (nie entity_id):",
-        "  - ORDER_CANCELLED.REASON → literal_value: NONPAYMENT",
-        "  - ACCOUNT_BLOCKED.REASON → literal_value: FRAUD_SUSPECT",
+        "  - ORDER_CANCELLED.REASON → literal_value: NONPAYMENT | ACCOUNT_BLOCKED | OTHER",
+        "  - ACCOUNT_BLOCKED.REASON → literal_value: FRAUD_SUSPECT | PREV_NONPAYMENT",
         "  - CHARGEBACK_RESOLVED.RESULT → WON_BY_CUSTOMER lub WON_BY_STORE",
         "",
         "## KLASTRY (właściwości encji)",
@@ -121,6 +121,10 @@ def build_system_prompt(
         "4. Literały (REASON, RESULT) → literal_value, nie entity_id.",
         "5. Klaster: maksymalnie 1 wartość na parę (entity_id, cluster_name).",
         "6. Jeśli encja nie jest wymieniona wprost — użyj CUST1 lub STORE1.",
+        "7. Dla każdego faktu podaj span_start/span_end (pozycje bajtów) i span_text"
+        " (dosłowny cytat z tekstu potwierdzający fakt).",
+        "8. Dla każdej encji i klastra podaj span_text: dosłowny cytat fragmentu tekstu,"
+        " w którym ta encja/właściwość została zidentyfikowana.",
     ]
 
     return "\n".join(lines)
@@ -151,6 +155,7 @@ def build_response_schema() -> dict[str, Any]:
             "entity_id":      {"type": "STRING"},
             "type":           {"type": "STRING"},
             "canonical_name": {"type": "STRING"},
+            "span_text":      {"type": "STRING"},
         },
         "required": ["entity_id", "type", "canonical_name"],
     }
@@ -162,6 +167,7 @@ def build_response_schema() -> dict[str, Any]:
             "args":       {"type": "ARRAY", "items": role_arg_schema},
             "span_start": {"type": "INTEGER"},
             "span_end":   {"type": "INTEGER"},
+            "span_text":  {"type": "STRING"},
         },
         "required": ["predicate", "args"],
     }
@@ -172,6 +178,7 @@ def build_response_schema() -> dict[str, Any]:
             "entity_id":    {"type": "STRING"},
             "cluster_name": {"type": "STRING"},
             "value":        {"type": "STRING"},
+            "span_text":    {"type": "STRING"},
         },
         "required": ["entity_id", "cluster_name", "value"],
     }
@@ -196,6 +203,7 @@ def parse_llm_response(
     source_id: str,
     year: int,
     schemas: list[ClusterSchema],
+    text: str | None = None,
 ) -> ExtractionResult:
     """
     Parsuje surowy dict z Gemini (po json.loads) → ExtractionResult.
@@ -210,17 +218,24 @@ def parse_llm_response(
     entities: list[Entity] = []
     seen_ids: set[str] = set()
 
-    def _add_entity(eid: str, etype: str, name: str, marker: str) -> None:
+    def _add_entity(
+        eid: str, etype: str, name: str, marker: str, span_text: str | None = None
+    ) -> None:
         if eid not in seen_ids:
             seen_ids.add(eid)
+            prov = (
+                [ProvenanceItem(source_id=source_id, span=Span(text=span_text), extractor="LLMExtractor")]
+                if span_text else []
+            )
             entities.append(Entity(
                 entity_id=eid,
                 type=etype,
                 canonical_name=name,
                 created_at=_stable_timestamp(year, source_id, "entity", etype, eid, marker),
+                provenance=prov,
             ))
 
-    # Zawsze: CUST1 + STORE1
+    # Zawsze: CUST1 + STORE1 (bez spanu — nie pochodzą z tekstu)
     _add_entity(IMPLICIT_CUSTOMER, "CUSTOMER", "Klient", "implicit_customer")
     _add_entity(IMPLICIT_STORE, "STORE", "Sklep", "implicit_store")
 
@@ -228,8 +243,9 @@ def parse_llm_response(
         eid = str(e.get("entity_id", "")).strip()
         etype = str(e.get("type", "")).strip().upper()
         name = str(e.get("canonical_name", eid)).strip()
+        span_text = str(e["span_text"]).strip() if e.get("span_text") else None
         if eid and etype:
-            _add_entity(eid, etype, name, "llm")
+            _add_entity(eid, etype, name, "llm", span_text=span_text)
 
     # ── Fakty ─────────────────────────────────────────────────────────────────
     facts: list[Fact] = []
@@ -272,11 +288,16 @@ def parse_llm_response(
             continue
         seen_fact_keys.add(fact_key)
 
-        span_start = int(f.get("span_start", 0))
-        span_end = int(f.get("span_end", 0))
-        span = Span(start=span_start, end=max(span_end, span_start + 1))
+        span_start = int(f["span_start"]) if f.get("span_start") is not None else None
+        span_end   = int(f["span_end"])   if f.get("span_end")   is not None else None
+        llm_text   = str(f["span_text"]).strip() if f.get("span_text") else None
+        computed_text = (
+            llm_text
+            or (text[span_start:span_end] if text and span_start is not None and span_end is not None else None)
+        )
+        span = Span(start=span_start, end=span_end, text=computed_text)
 
-        fact_seed = f"{source_id}|{predicate}|{span.start}:{span.end}|{'|'.join(fact_key[1:])}"
+        fact_seed = f"{source_id}|{predicate}|{span.start or 0}:{span.end or 0}|{'|'.join(fact_key[1:])}"
         fact = Fact(
             fact_id=str(uuid.uuid5(uuid.NAMESPACE_URL, fact_seed)),
             predicate=predicate,
@@ -324,6 +345,8 @@ def parse_llm_response(
             continue  # duplikat — weź pierwszą wartość
         seen_clusters.add(key)
 
+        span_text = str(cs["span_text"]).strip() if cs.get("span_text") else None
+
         # Hard clamp: +M dla dopasowanej wartości, -M dla pozostałych
         logits = [
             _CLAMP_M if d == value else -_CLAMP_M
@@ -336,6 +359,7 @@ def parse_llm_response(
             is_clamped=True,
             clamp_hard=True,
             clamp_source="text",
+            source_span=Span(text=span_text) if span_text else None,
         ))
 
     return ExtractionResult(

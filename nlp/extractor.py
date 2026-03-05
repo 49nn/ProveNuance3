@@ -105,7 +105,7 @@ class TextExtractor:
         entity_pos["COUPON"] = self._find_coupon_positions(text)
 
         # 4. Encje
-        entities = self._build_entities(entity_pos, date_pos, source_id)
+        entities = self._build_entities(entity_pos, date_pos, source_id, text)
 
         # 5. Fakty
         facts = self._extract_facts(text, entity_pos, date_pos, source_id)
@@ -129,16 +129,16 @@ class TextExtractor:
 
     def _find_entity_positions(
         self, text: str
-    ) -> dict[str, list[tuple[str, int]]]:
-        result: dict[str, list[tuple[str, int]]] = {}
+    ) -> dict[str, list[tuple[str, int, int]]]:
+        result: dict[str, list[tuple[str, int, int]]] = {}
         for entity_type, pattern in ENTITY_ID_PATTERNS:
-            positions = [(m.group(), m.start()) for m in pattern.finditer(text)]
+            positions = [(m.group(), m.start(), m.end()) for m in pattern.finditer(text)]
             if positions:
                 result[entity_type] = positions
         return result
 
-    def _find_date_positions(self, text: str) -> list[tuple[str, int]]:
-        dates: list[tuple[str, int]] = []
+    def _find_date_positions(self, text: str) -> list[tuple[str, int, int]]:
+        dates: list[tuple[str, int, int]] = []
         for m in DATE_RE.finditer(text):
             day = int(m.group(1))
             month_key = m.group(2).lower()
@@ -146,10 +146,10 @@ class TextExtractor:
             if month == 0:
                 continue
             date_id = f"D_{self.year}-{month:02d}-{day:02d}"
-            dates.append((date_id, m.start()))
+            dates.append((date_id, m.start(), m.end()))
         return dates
 
-    def _find_coupon_positions(self, text: str) -> list[tuple[str, int]]:
+    def _find_coupon_positions(self, text: str) -> list[tuple[str, int, int]]:
         """
         Krok 1: Znajdź kody kuponów w kontekście słów 'kupon'/'kod'.
         Krok 2: Wyszukaj wszystkie wystąpienia tych kodów w tekście.
@@ -167,11 +167,11 @@ class TextExtractor:
             return []
 
         # Wszystkie wystąpienia tych kodów w tekście
-        positions: list[tuple[str, int]] = []
+        positions: list[tuple[str, int, int]] = []
         for m in COUPON_CODE_RE.finditer(text):
             code = m.group(1).upper()
             if code in known_codes:
-                positions.append((code, m.start()))
+                positions.append((code, m.start(), m.end()))
 
         return positions
 
@@ -181,16 +181,27 @@ class TextExtractor:
 
     def _build_entities(
         self,
-        entity_pos: dict[str, list[tuple[str, int]]],
-        date_pos: list[tuple[str, int]],
+        entity_pos: dict[str, list[tuple[str, int, int]]],
+        date_pos: list[tuple[str, int, int]],
         source_id: str,
+        text: str,
     ) -> list[Entity]:
         seen: set[str] = set()
         entities: list[Entity] = []
 
-        def add(eid: str, etype: str, name: str, marker: str) -> None:
+        def add(
+            eid: str,
+            etype: str,
+            name: str,
+            marker: str,
+            span: Span | None = None,
+        ) -> None:
             if eid not in seen:
                 seen.add(eid)
+                prov = (
+                    [ProvenanceItem(source_id=source_id, span=span, extractor="TextExtractor")]
+                    if span is not None else []
+                )
                 entities.append(Entity(
                     entity_id=eid,
                     type=etype,
@@ -202,27 +213,34 @@ class TextExtractor:
                         eid,
                         marker,
                     ),
+                    provenance=prov,
                 ))
 
-        # Zawsze: implicit customer + store
+        # Zawsze: implicit customer + store (bez spanu — nie pochodzą z tekstu)
         add(IMPLICIT_CUSTOMER, "CUSTOMER", "Klient", "implicit_customer")
         add(IMPLICIT_STORE, "STORE", "Sklep", "implicit_store")
 
         # Explicit entities z tekstu
         for etype, positions in entity_pos.items():
             seen_local: set[str] = set()
-            for eid, pos in positions:
+            for eid, start, end in positions:
                 if eid not in seen_local:
                     seen_local.add(eid)
-                    add(eid, etype, f"{etype} {eid}", f"pos:{pos}")
+                    add(
+                        eid, etype, f"{etype} {eid}", f"pos:{start}",
+                        span=Span(start=start, end=end, text=text[start:end]),
+                    )
 
         # DATE entities
         seen_dates: set[str] = set()
-        for date_id, pos in date_pos:
+        for date_id, start, end in date_pos:
             if date_id not in seen_dates:
                 seen_dates.add(date_id)
                 date_str = date_id[2:]  # usuń "D_"
-                add(date_id, "DATE", date_str, f"pos:{pos}")
+                add(
+                    date_id, "DATE", date_str, f"pos:{start}",
+                    span=Span(start=start, end=end, text=text[start:end]),
+                )
 
         return entities
 
@@ -277,8 +295,8 @@ class TextExtractor:
     def _extract_facts(
         self,
         text: str,
-        entity_pos: dict[str, list[tuple[str, int]]],
-        date_pos: list[tuple[str, int]],
+        entity_pos: dict[str, list[tuple[str, int, int]]],
+        date_pos: list[tuple[str, int, int]],
         source_id: str,
     ) -> list[Fact]:
         facts: list[Fact] = []
@@ -287,7 +305,7 @@ class TextExtractor:
         for rule in FACT_RULES:
             for m in rule.trigger.finditer(text):
                 trigger_pos = m.start()
-                span = Span(start=m.start(), end=m.end())
+                span = Span(start=m.start(), end=m.end(), text=m.group())
 
                 if rule.predicate == "COUPON_APPLIED":
                     # Specjalny przypadek: jedna fact per kupon w oknie
@@ -311,8 +329,8 @@ class TextExtractor:
         self,
         rule: FactRule,
         pos: int,
-        entity_pos: dict[str, list[tuple[str, int]]],
-        date_pos: list[tuple[str, int]],
+        entity_pos: dict[str, list[tuple[str, int, int]]],
+        date_pos: list[tuple[str, int, int]],
         source_id: str,
         span: Span,
         dedup: set[tuple[str, ...]],
@@ -320,7 +338,7 @@ class TextExtractor:
     ) -> list[Fact]:
         """Generuje jedną COUPON_APPLIED per kupon w oknie ±500 znaków."""
         coupon_all = entity_pos.get("COUPON", [])
-        nearby = [eid for eid, cp in coupon_all if abs(cp - pos) <= 500]
+        nearby = [eid for eid, cp, _end in coupon_all if abs(cp - pos) <= 500]
 
         if not nearby:
             nearby_eid = self._closest(pos, coupon_all)
@@ -330,7 +348,7 @@ class TextExtractor:
         result: list[Fact] = []
         for coupon_id in dict.fromkeys(nearby):   # unikalne, zachowując kolejność
             modified = dict(entity_pos)
-            modified["COUPON"] = [(coupon_id, pos)]
+            modified["COUPON"] = [(coupon_id, pos, pos + len(coupon_id))]
             args = self._resolve_roles(rule, pos, modified, date_pos, text)
             if args is None:
                 continue
@@ -346,8 +364,8 @@ class TextExtractor:
         self,
         rule: FactRule,
         pos: int,
-        entity_pos: dict[str, list[tuple[str, int]]],
-        date_pos: list[tuple[str, int]],
+        entity_pos: dict[str, list[tuple[str, int, int]]],
+        date_pos: list[tuple[str, int, int]],
         text: str,
     ) -> list[RoleArg] | None:
         """
@@ -369,8 +387,8 @@ class TextExtractor:
         self,
         source: str,
         pos: int,
-        entity_pos: dict[str, list[tuple[str, int]]],
-        date_pos: list[tuple[str, int]],
+        entity_pos: dict[str, list[tuple[str, int, int]]],
+        date_pos: list[tuple[str, int, int]],
         text: str,
     ) -> dict[str, Any] | None:
         if source == "IMPLICIT_CUSTOMER":
@@ -401,7 +419,7 @@ class TextExtractor:
     def _extract_cluster_states(
         self,
         text: str,
-        entity_pos: dict[str, list[tuple[str, int]]],
+        entity_pos: dict[str, list[tuple[str, int, int]]],
     ) -> list[ClusterStateRow]:
         states: list[ClusterStateRow] = []
         seen: set[tuple[str, str, str]] = set()
@@ -433,6 +451,7 @@ class TextExtractor:
                     is_clamped=True,
                     clamp_hard=True,
                     clamp_source="text",
+                    source_span=Span(start=m.start(), end=m.end(), text=m.group()),
                 ))
 
         return states
@@ -441,7 +460,7 @@ class TextExtractor:
         self,
         rule: ClusterRule,
         pos: int,
-        entity_pos: dict[str, list[tuple[str, int]]],
+        entity_pos: dict[str, list[tuple[str, int, int]]],
     ) -> str | None:
         etype = rule.entity_type
         if etype == "CUSTOMER":
@@ -460,7 +479,7 @@ class TextExtractor:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _closest(pos: int, positions: list[tuple[str, int]]) -> str | None:
+    def _closest(pos: int, positions: list[tuple[str, int, int]]) -> str | None:
         if not positions:
             return None
         return min(positions, key=lambda x: abs(x[1] - pos))[0]
@@ -468,7 +487,7 @@ class TextExtractor:
     @staticmethod
     def _closest_in_sentence(
         pos: int,
-        positions: list[tuple[str, int]],
+        positions: list[tuple[str, int, int]],
         text: str,
     ) -> str | None:
         """
@@ -485,7 +504,7 @@ class TextExtractor:
         sent_end = sent_end_dot if sent_end_dot != -1 else len(text)
 
         in_sentence = [
-            (eid, p) for eid, p in positions
+            (eid, p) for eid, p, *_ in positions
             if sent_start <= p <= sent_end
         ]
         if in_sentence:

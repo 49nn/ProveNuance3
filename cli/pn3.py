@@ -1037,44 +1037,129 @@ def cmd_network_graph(args: argparse.Namespace) -> None:
 # reset-state
 # ---------------------------------------------------------------------------
 
-def _collect_reset_counts(conn, prune_cluster_states: bool) -> dict[str, int]:
+def _collect_reset_counts(
+    conn, prune_cluster_states: bool, case_id: str | None = None
+) -> dict[str, int]:
     with conn.cursor() as cur:
-        cur.execute("SELECT COUNT(*) FROM rules WHERE learned = TRUE")
-        learned_rules = int(cur.fetchone()[0])
+        if case_id is None:
+            cur.execute("SELECT COUNT(*) FROM rules WHERE learned = TRUE")
+            learned_rules = int(cur.fetchone()[0])
 
-        cur.execute("SELECT COUNT(*) FROM proof_runs")
-        proof_runs = int(cur.fetchone()[0])
+            cur.execute("SELECT COUNT(*) FROM proof_runs")
+            proof_runs = int(cur.fetchone()[0])
 
-        cur.execute("SELECT COUNT(*) FROM proof_steps")
-        proof_steps = int(cur.fetchone()[0])
+            cur.execute("SELECT COUNT(*) FROM proof_steps")
+            proof_steps = int(cur.fetchone()[0])
 
-        cur.execute("SELECT COUNT(*) FROM facts WHERE status <> 'observed'")
-        non_observed_facts = int(cur.fetchone()[0])
+            cur.execute("SELECT COUNT(*) FROM facts WHERE status <> 'observed'")
+            non_observed_facts = int(cur.fetchone()[0])
 
-        cur.execute("SELECT COUNT(*) FROM fact_neural_trace")
-        neural_traces = int(cur.fetchone()[0])
+            cur.execute("SELECT COUNT(*) FROM fact_neural_trace")
+            neural_traces = int(cur.fetchone()[0])
 
-        cur.execute("SELECT COUNT(*) FROM facts WHERE proof_id IS NOT NULL")
-        facts_with_proof = int(cur.fetchone()[0])
+            cur.execute("SELECT COUNT(*) FROM facts WHERE proof_id IS NOT NULL")
+            facts_with_proof = int(cur.fetchone()[0])
 
-        cur.execute(
-            """
-            SELECT COUNT(*)
-            FROM facts
-            WHERE status = 'observed'
-              AND (
-                    truth_value IS DISTINCT FROM 'T'::truth_value
-                 OR truth_confidence IS DISTINCT FROM 1.0
-                 OR truth_logits IS NOT NULL
-              )
-            """
-        )
-        observed_needing_truth_reset = int(cur.fetchone()[0])
+            cur.execute(
+                """
+                SELECT COUNT(*)
+                FROM facts
+                WHERE status = 'observed'
+                  AND (
+                        truth_value IS DISTINCT FROM 'T'::truth_value
+                     OR truth_confidence IS DISTINCT FROM 1.0
+                     OR truth_logits IS NOT NULL
+                  )
+                """
+            )
+            observed_needing_truth_reset = int(cur.fetchone()[0])
 
-        prunable_cluster_states = 0
-        if prune_cluster_states:
-            cur.execute("SELECT COUNT(*) FROM cluster_states WHERE is_clamped = FALSE")
-            prunable_cluster_states = int(cur.fetchone()[0])
+            prunable_cluster_states = 0
+            if prune_cluster_states:
+                cur.execute("SELECT COUNT(*) FROM cluster_states WHERE is_clamped = FALSE")
+                prunable_cluster_states = int(cur.fetchone()[0])
+        else:
+            learned_rules = 0  # reguły są globalne — nie dotykamy przy reset per-case
+
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM proof_runs pr
+                JOIN cases c ON c.id = pr.case_id
+                WHERE c.case_id = %s
+                """,
+                (case_id,),
+            )
+            proof_runs = int(cur.fetchone()[0])
+
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM proof_steps ps
+                JOIN proof_runs pr ON pr.id = ps.run_id
+                JOIN cases c ON c.id = pr.case_id
+                WHERE c.case_id = %s
+                """,
+                (case_id,),
+            )
+            proof_steps = int(cur.fetchone()[0])
+
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM facts f
+                JOIN cases c ON c.id = f.case_id
+                WHERE c.case_id = %s AND f.status <> 'observed'
+                """,
+                (case_id,),
+            )
+            non_observed_facts = int(cur.fetchone()[0])
+
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM fact_neural_trace fnt
+                JOIN facts f ON f.id = fnt.fact_id
+                JOIN cases c ON c.id = f.case_id
+                WHERE c.case_id = %s
+                """,
+                (case_id,),
+            )
+            neural_traces = int(cur.fetchone()[0])
+
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM facts f
+                JOIN cases c ON c.id = f.case_id
+                WHERE c.case_id = %s AND f.proof_id IS NOT NULL
+                """,
+                (case_id,),
+            )
+            facts_with_proof = int(cur.fetchone()[0])
+
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM facts f
+                JOIN cases c ON c.id = f.case_id
+                WHERE c.case_id = %s
+                  AND f.status = 'observed'
+                  AND (
+                        f.truth_value IS DISTINCT FROM 'T'::truth_value
+                     OR f.truth_confidence IS DISTINCT FROM 1.0
+                     OR f.truth_logits IS NOT NULL
+                  )
+                """,
+                (case_id,),
+            )
+            observed_needing_truth_reset = int(cur.fetchone()[0])
+
+            prunable_cluster_states = 0
+            if prune_cluster_states:
+                cur.execute(
+                    """
+                    SELECT COUNT(*) FROM cluster_states cs
+                    JOIN cases c ON c.id = cs.case_id
+                    WHERE c.case_id = %s AND cs.is_clamped = FALSE
+                    """,
+                    (case_id,),
+                )
+                prunable_cluster_states = int(cur.fetchone()[0])
 
     return {
         "learned_rules": learned_rules,
@@ -1088,69 +1173,148 @@ def _collect_reset_counts(conn, prune_cluster_states: bool) -> dict[str, int]:
     }
 
 
-def _apply_reset(conn, prune_cluster_states: bool) -> dict[str, int]:
+def _apply_reset(
+    conn, prune_cluster_states: bool, case_id: str | None = None
+) -> dict[str, int]:
     result: dict[str, int] = {}
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM rules WHERE learned = TRUE")
-        result["deleted_learned_rules"] = cur.rowcount
+        if case_id is None:
+            cur.execute("DELETE FROM rules WHERE learned = TRUE")
+            result["deleted_learned_rules"] = cur.rowcount
 
-        cur.execute("DELETE FROM proof_runs")
-        result["deleted_proof_runs"] = cur.rowcount
+            cur.execute("DELETE FROM proof_runs")
+            result["deleted_proof_runs"] = cur.rowcount
 
-        # Czyścimy jawnie, choć zwykle po usunięciu facts i tak byłoby puste.
-        cur.execute("DELETE FROM fact_neural_trace")
-        result["deleted_neural_traces"] = cur.rowcount
+            cur.execute("DELETE FROM fact_neural_trace")
+            result["deleted_neural_traces"] = cur.rowcount
 
-        cur.execute("DELETE FROM facts WHERE status <> 'observed'")
-        result["deleted_non_observed_facts"] = cur.rowcount
+            cur.execute("DELETE FROM facts WHERE status <> 'observed'")
+            result["deleted_non_observed_facts"] = cur.rowcount
 
-        cur.execute(
-            """
-            UPDATE facts
-            SET
-                proof_id = NULL,
-                truth_value = 'T'::truth_value,
-                truth_confidence = 1.0,
-                truth_logits = NULL
-            WHERE status = 'observed'
-              AND (
-                    proof_id IS NOT NULL
-                 OR truth_value IS DISTINCT FROM 'T'::truth_value
-                 OR truth_confidence IS DISTINCT FROM 1.0
-                 OR truth_logits IS NOT NULL
-              )
-            """
-        )
-        result["reset_observed_facts"] = cur.rowcount
+            cur.execute(
+                """
+                UPDATE facts
+                SET
+                    proof_id = NULL,
+                    truth_value = 'T'::truth_value,
+                    truth_confidence = 1.0,
+                    truth_logits = NULL
+                WHERE status = 'observed'
+                  AND (
+                        proof_id IS NOT NULL
+                     OR truth_value IS DISTINCT FROM 'T'::truth_value
+                     OR truth_confidence IS DISTINCT FROM 1.0
+                     OR truth_logits IS NOT NULL
+                  )
+                """
+            )
+            result["reset_observed_facts"] = cur.rowcount
 
-        if prune_cluster_states:
-            cur.execute("DELETE FROM cluster_states WHERE is_clamped = FALSE")
-            result["deleted_non_clamped_cluster_states"] = cur.rowcount
+            if prune_cluster_states:
+                cur.execute("DELETE FROM cluster_states WHERE is_clamped = FALSE")
+                result["deleted_non_clamped_cluster_states"] = cur.rowcount
+            else:
+                result["deleted_non_clamped_cluster_states"] = 0
+
+            cur.execute(
+                """
+                DELETE FROM rule_modules rm
+                WHERE rm.name = 'learned_nn'
+                  AND NOT EXISTS (
+                        SELECT 1 FROM rules r WHERE r.module_id = rm.id
+                  )
+                """
+            )
+            result["deleted_empty_learned_modules"] = cur.rowcount
         else:
-            result["deleted_non_clamped_cluster_states"] = 0
+            result["deleted_learned_rules"] = 0  # reguły są globalne
 
-        cur.execute(
-            """
-            DELETE FROM rule_modules rm
-            WHERE rm.name = 'learned_nn'
-              AND NOT EXISTS (
-                    SELECT 1 FROM rules r WHERE r.module_id = rm.id
-              )
-            """
-        )
-        result["deleted_empty_learned_modules"] = cur.rowcount
+            cur.execute(
+                """
+                DELETE FROM proof_runs
+                WHERE case_id IN (SELECT id FROM cases WHERE case_id = %s)
+                """,
+                (case_id,),
+            )
+            result["deleted_proof_runs"] = cur.rowcount
+
+            cur.execute(
+                """
+                DELETE FROM fact_neural_trace
+                WHERE fact_id IN (
+                    SELECT f.id FROM facts f
+                    JOIN cases c ON c.id = f.case_id
+                    WHERE c.case_id = %s
+                )
+                """,
+                (case_id,),
+            )
+            result["deleted_neural_traces"] = cur.rowcount
+
+            cur.execute(
+                """
+                DELETE FROM facts
+                WHERE case_id IN (SELECT id FROM cases WHERE case_id = %s)
+                  AND status <> 'observed'
+                """,
+                (case_id,),
+            )
+            result["deleted_non_observed_facts"] = cur.rowcount
+
+            cur.execute(
+                """
+                UPDATE facts
+                SET
+                    proof_id = NULL,
+                    truth_value = 'T'::truth_value,
+                    truth_confidence = 1.0,
+                    truth_logits = NULL
+                WHERE case_id IN (SELECT id FROM cases WHERE case_id = %s)
+                  AND status = 'observed'
+                  AND (
+                        proof_id IS NOT NULL
+                     OR truth_value IS DISTINCT FROM 'T'::truth_value
+                     OR truth_confidence IS DISTINCT FROM 1.0
+                     OR truth_logits IS NOT NULL
+                  )
+                """,
+                (case_id,),
+            )
+            result["reset_observed_facts"] = cur.rowcount
+
+            if prune_cluster_states:
+                cur.execute(
+                    """
+                    DELETE FROM cluster_states
+                    WHERE case_id IN (SELECT id FROM cases WHERE case_id = %s)
+                      AND is_clamped = FALSE
+                    """,
+                    (case_id,),
+                )
+                result["deleted_non_clamped_cluster_states"] = cur.rowcount
+            else:
+                result["deleted_non_clamped_cluster_states"] = 0
+
+            result["deleted_empty_learned_modules"] = 0
 
     return result
 
 
 def cmd_reset_state(args: argparse.Namespace) -> None:
     prune_cluster_states = not args.keep_cluster_states
+    case_id: str | None = getattr(args, "case_id", None) or None
 
     with connect() as conn:
-        counts = _collect_reset_counts(conn, prune_cluster_states=prune_cluster_states)
+        counts = _collect_reset_counts(
+            conn, prune_cluster_states=prune_cluster_states, case_id=case_id
+        )
 
-        console.print("[bold cyan]Reset Preview[/bold cyan]")
-        console.print(f"learned_rules: {counts['learned_rules']}")
+        scope = f"[bold yellow]{case_id}[/bold yellow]" if case_id else "[bold yellow]ALL[/bold yellow]"
+        console.print(f"[bold cyan]Reset Preview[/bold cyan]  scope={scope}")
+        if case_id:
+            console.print("[dim]Learned rules are global — skipped for per-case reset.[/dim]")
+        else:
+            console.print(f"learned_rules: {counts['learned_rules']}")
         console.print(f"proof_runs: {counts['proof_runs']}")
         console.print(f"proof_steps: {counts['proof_steps']}")
         console.print(f"facts_non_observed: {counts['non_observed_facts']}")
@@ -1168,7 +1332,9 @@ def cmd_reset_state(args: argparse.Namespace) -> None:
             return
 
         try:
-            applied = _apply_reset(conn, prune_cluster_states=prune_cluster_states)
+            applied = _apply_reset(
+                conn, prune_cluster_states=prune_cluster_states, case_id=case_id
+            )
             conn.commit()
         except Exception:
             conn.rollback()
@@ -1176,13 +1342,15 @@ def cmd_reset_state(args: argparse.Namespace) -> None:
 
     console.print()
     console.print("[bold green]Reset Applied[/bold green]")
-    console.print(f"deleted learned rules: {applied['deleted_learned_rules']}")
+    if not case_id:
+        console.print(f"deleted learned rules: {applied['deleted_learned_rules']}")
     console.print(f"deleted proof runs: {applied['deleted_proof_runs']}")
     console.print(f"deleted neural traces: {applied['deleted_neural_traces']}")
     console.print(f"deleted non-observed facts: {applied['deleted_non_observed_facts']}")
     console.print(f"reset observed facts (proof/truth): {applied['reset_observed_facts']}")
     console.print(f"deleted non-clamped cluster_states: {applied['deleted_non_clamped_cluster_states']}")
-    console.print(f"deleted empty learned modules: {applied['deleted_empty_learned_modules']}")
+    if not case_id:
+        console.print(f"deleted empty learned modules: {applied['deleted_empty_learned_modules']}")
 
 
 # ---------------------------------------------------------------------------
@@ -1333,7 +1501,11 @@ def cmd_ingest_text(args: argparse.Namespace) -> None:
             with session.conn.transaction():
                 _ensure_case_exists(session.conn, case_id, source_id, title)
 
+        _api_key = os.environ.get(cfg.extractor.api_key_env, "")
+        _key_hint = f"…{_api_key[-4:]}" if _api_key else "BRAK"
         console.print(
+            f"[dim]Ekstrakcja ({cfg.extractor.backend}, model={cfg.extractor.gemini_model}, key={_key_hint}) → {case_id}...[/dim]"
+            if cfg.extractor.backend == "llm" else
             f"[dim]Ekstrakcja ({cfg.extractor.backend}) → {case_id}...[/dim]"
         )
         extractor = get_extractor(schemas, cfg)
@@ -1352,6 +1524,89 @@ def cmd_ingest_text(args: argparse.Namespace) -> None:
         f"[bold green]ingest-text completed[/bold green]: {case_id}"
     )
     console.print(result.summary())
+
+
+# ---------------------------------------------------------------------------
+# ingest-folder
+# ---------------------------------------------------------------------------
+
+def cmd_ingest_folder(args: argparse.Namespace) -> None:
+    """
+    Ekstrahuje fakty ze wszystkich plików .txt w podanym folderze.
+    Case ID = nazwa pliku bez rozszerzenia (np. TC-001.txt → TC-001).
+
+    Tryby:
+      pn3 ingest-folder text_cases/
+      pn3 ingest-folder text_cases/ --backend llm
+      pn3 ingest-folder text_cases/ --dry-run
+      pn3 ingest-folder text_cases/ --pattern "TC-*.txt"
+    """
+    from pathlib import Path
+
+    from config import ProjectConfig
+    from db import DBSession
+    from nlp import get_extractor
+
+    folder = Path(args.folder)
+    if not folder.is_dir():
+        console.print(f"[bold red]Folder nie istnieje:[/bold red] {folder}")
+        raise SystemExit(1)
+
+    pattern = args.pattern or "*.txt"
+    files = sorted(folder.glob(pattern))
+    if not files:
+        console.print(f"[yellow]Brak plików pasujących do wzorca '{pattern}' w {folder}[/yellow]")
+        return
+
+    cfg = ProjectConfig.load()
+    if getattr(args, "backend", None):
+        from dataclasses import replace as dc_replace
+        cfg = dc_replace(cfg, extractor=dc_replace(cfg.extractor, backend=args.backend))
+
+    _api_key = os.environ.get(cfg.extractor.api_key_env, "")
+    _key_hint = f"…{_api_key[-4:]}" if _api_key else "BRAK"
+    backend_info = (
+        f"llm, model={cfg.extractor.gemini_model}, key={_key_hint}"
+        if cfg.extractor.backend == "llm" else cfg.extractor.backend
+    )
+    console.print(f"[dim]Folder: {folder}  |  pliki: {len(files)}  |  backend: {backend_info}[/dim]")
+
+    with DBSession.connect() as session:
+        schemas = session.load_cluster_schemas()
+        extractor = get_extractor(schemas, cfg)
+
+        ok = skipped = errors = 0
+        for f in files:
+            case_id = f.stem
+            source_id = f"{case_id}-TEXT"
+            text = f.read_text(encoding="utf-8").strip()
+            if not text:
+                console.print(f"  [yellow]SKIP[/yellow] {f.name} — pusty plik")
+                skipped += 1
+                continue
+
+            try:
+                with session.conn.transaction():
+                    _ensure_case_exists(session.conn, case_id, source_id, case_id)
+
+                result = extractor.extract(text, source_id=source_id)
+
+                if args.dry_run:
+                    console.print(f"  [yellow]DRY[/yellow] {case_id}: {result.summary()}")
+                    skipped += 1
+                    continue
+
+                session.save_extraction_result(result, case_id=case_id, source_text=text)
+                console.print(f"  [green]OK[/green]  {case_id}: {result.summary()}")
+                ok += 1
+            except Exception as exc:
+                console.print(f"  [bold red]ERR[/bold red] {case_id}: {exc}")
+                errors += 1
+
+    console.print(
+        f"\n[bold]ingest-folder zakończony[/bold]: "
+        f"[green]{ok} OK[/green]  [yellow]{skipped} pominięto[/yellow]  [red]{errors} błędów[/red]"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1761,7 +2016,9 @@ def cmd_explain(args: argparse.Namespace) -> None:
             )
         return
 
-    console.print(f"[dim]Generuję wyjaśnienie dla {case_id} ({cfg.explainer.gemini_model})...[/dim]")
+    _api_key = os.environ.get(cfg.explainer.api_key_env, "")
+    _key_hint = f"…{_api_key[-4:]}" if _api_key else "BRAK"
+    console.print(f"[dim]Generuję wyjaśnienie dla {case_id} ({cfg.explainer.gemini_model}, key={_key_hint})...[/dim]")
     explanation = explainer.explain(
         case_text=case_text,
         facts=facts,
@@ -1799,6 +2056,7 @@ _COMMANDS = {
     "network-graph": (cmd_network_graph, "Export full case network graph (entities/facts/clusters/edges)"),
     "reset-state":   (cmd_reset_state,   "Reset runtime artifacts (learned rules, inferred facts, proofs, traces)"),
     "ingest-text":   (cmd_ingest_text,   "Extract facts from text and save to DB for a given case_id"),
+    "ingest-folder": (cmd_ingest_folder, "Extract facts from all .txt files in a folder (case_id = filename)"),
     "run-case":      (cmd_run_case,      "Run full pipeline for one case_id and save results"),
     "learn-rules":   (cmd_learn_rules,   "Train NN proposer and persist extracted learned rules"),
     "llm-prompt":    (cmd_llm_prompt,    "Preview LLM system prompt and JSON schema (no API call)"),
@@ -1873,6 +2131,12 @@ def main() -> None:
                 "--keep-cluster-states",
                 action="store_true",
                 help="Do not delete non-clamped cluster_states rows.",
+            )
+            cmd_parser.add_argument(
+                "--case-id",
+                default=None,
+                metavar="CASE_ID",
+                help="Limit reset to a single case (e.g. TC-010). Learned rules are never deleted in per-case mode.",
             )
         elif name == "learn-rules":
             cmd_parser.add_argument(
@@ -1953,6 +2217,25 @@ def main() -> None:
                 choices=["regex", "llm"],
                 default=None,
                 help="Backend ekstrakcji: regex (domyślnie z config) lub llm (Gemini).",
+            )
+        elif name == "ingest-folder":
+            cmd_parser.add_argument("folder", help="Ścieżka do folderu z plikami .txt")
+            cmd_parser.add_argument(
+                "--pattern",
+                default="*.txt",
+                metavar="GLOB",
+                help="Wzorzec glob plików (domyślnie: *.txt).",
+            )
+            cmd_parser.add_argument(
+                "--backend",
+                choices=["regex", "llm"],
+                default=None,
+                help="Backend ekstrakcji: regex (domyślnie z config) lub llm (Gemini).",
+            )
+            cmd_parser.add_argument(
+                "--dry-run",
+                action="store_true",
+                help="Pokaż wynik ekstrakcji bez zapisu do DB.",
             )
         elif name == "llm-prompt":
             cmd_parser.add_argument(

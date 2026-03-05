@@ -1,0 +1,3 @@
+Jan Kowalski (klient indywidualny, konsument) złożył zamówienie O100 w sklepie Sklep Testowy Sp. z o.o. dnia 10 stycznia 2026 na słuchawki bezprzewodowe XZ-500 (produkt fizyczny PROD1). Sklep przyjął zamówienie tego samego dnia. Klient dokonał płatności kartą kredytową (PAY1) w kwocie 299,99 zł dnia 10 stycznia 2026.
+
+Towar dostarczono kurierem DHL (DEL1) dnia 15 stycznia 2026. Klient złożył oświadczenie o odstąpieniu od umowy (STMT1) dnia 20 stycznia 2026, tj. po 5 dniach od dostawy – w ustawowym terminie 14-dniowym. Towar odesłano przesyłką zwrotną DHL (RS1) dnia 22 stycznia 2026.
