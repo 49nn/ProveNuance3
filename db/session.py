@@ -137,11 +137,19 @@ class DBSession:
                 entity_id_map[entity.entity_id] = actual_id
 
             for fact in result.facts:
-                fact_to_save = (
-                    fact
-                    if fact.status == FactStatus.observed
-                    else fact.model_copy(update={"status": FactStatus.observed})
-                )
+                remapped_args = [
+                    arg.model_copy(update={
+                        "entity_id": (
+                            entity_id_map.get(arg.entity_id, arg.entity_id)
+                            if arg.entity_id is not None else None
+                        ),
+                    })
+                    for arg in fact.args
+                ]
+                fact_to_save = fact.model_copy(update={
+                    "args": remapped_args,
+                    "status": FactStatus.observed,
+                })
                 upsert_fact(self.conn, fact_to_save, case_id_int)
 
             # Przepisz entity_id w cluster_states na faktyczny DB-id;

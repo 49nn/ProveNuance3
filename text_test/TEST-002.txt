@@ -1,5 +1,0 @@
-Anna Kaminska (konsument) zlozyla zamowienie O5002 dnia 12 stycznia 2026 na sluchawki bezprzewodowe (produkt fizyczny P5002). Sklep AudioTech Sp. z o.o. przyjal zamowienie 12 stycznia 2026. Klientka zaplacila BLIKiem (PAY5002) kwote 399,00 zl.
-
-Towar dostarczono (DEL5002) dnia 17 stycznia 2026. Sluchawki nie laczyly sie z telefonem – towar wadliwy (defective=YES). Klientka zlozyla oswiadczenie o odstapeniu (STMT5002) dnia 19 stycznia 2026. Sklep zgodzil sie pokryc koszt odeslania (store_pays_return=YES).
-
-Klientka oczekuje zwrotu 399,00 zl.

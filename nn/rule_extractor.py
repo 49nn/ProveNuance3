@@ -20,16 +20,6 @@ class RuleExtractionConfig:
     top_k_per_source_value: int = 2
     rule_id_prefix: str = "learned.nn"
 
-
-def _cluster_roles(schema: ClusterSchema) -> tuple[str, str]:
-    entity_role = schema.entity_type.upper()
-    if schema.name.endswith("_type"):
-        return entity_role, "TYPE"
-    if schema.name == "payment_method":
-        return entity_role, "METHOD"
-    return entity_role, "VALUE"
-
-
 def _score_matrix(spec: EdgeTypeSpec, mp_bank: HeteroMessagePassingBank) -> torch.Tensor:
     module = mp_bank.get_module(spec)
     # Effective matrix used in message passing.
@@ -59,8 +49,10 @@ def extract_rules_from_mp_bank(
             continue
 
         weights = _score_matrix(spec, mp_bank)  # [src_dim, dst_dim]
-        src_entity_role, src_value_role = _cluster_roles(src_schema)
-        dst_entity_role, dst_value_role = _cluster_roles(dst_schema)
+        src_entity_role = src_schema.resolved_entity_role
+        src_value_role = src_schema.resolved_value_role
+        dst_entity_role = dst_schema.resolved_entity_role
+        dst_value_role = dst_schema.resolved_value_role
 
         for src_i, src_value in enumerate(src_schema.domain):
             row = weights[src_i]

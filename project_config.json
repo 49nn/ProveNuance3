@@ -1,6 +1,6 @@
 {
   "extractor": {
-    "backend": "regex",
+    "backend": "llm",
     "gemini_model": "gemini-2.5-flash",
     "temperature": 0.0,
     "max_retries": 2,

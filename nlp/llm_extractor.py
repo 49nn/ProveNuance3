@@ -1,10 +1,6 @@
 """
 LLMExtractor — ekstraktor faktów z polskiego tekstu oparty o Google Gemini.
 
-Interfejs identyczny z TextExtractor:
-    extractor = LLMExtractor(cluster_schemas, config)
-    result = extractor.extract(text, source_id="case1")
-
 Przepływ:
   1. Zbuduj system prompt z ontologii (predykaty + klastry z schematów)
   2. Wywołaj Gemini API (structured JSON output)
@@ -16,7 +12,6 @@ Przepływ:
 from __future__ import annotations
 
 import json
-import warnings
 from collections import defaultdict
 from typing import Any
 
@@ -38,7 +33,7 @@ class LLMExtractor:
     Ekstraktor faktów oparty o Google Gemini z pętlą zwrotną Symbolic Verifier.
 
     Parametry:
-        cluster_schemas:   lista schematów klastrów (z DB / seed_ontology)
+        cluster_schemas:   lista schematów klastrów z aktywnej ontologii
         config:            ExtractorConfig z config.py
         year:              rok domyślny dla dat bez roku (np. "1 lutego" → 2026-02-01)
     """
@@ -58,19 +53,20 @@ class LLMExtractor:
                 "Zainstaluj: pip install google-genai"
             ) from exc
 
+        if not cluster_schemas:
+            raise ValueError("LLMExtractor wymaga aktywnej ontologii z co najmniej jednym klastrem.")
+        if not predicate_positions:
+            raise ValueError(
+                "LLMExtractor wymaga predicate_positions z aktywnej ontologii. "
+                "Uruchom gen-ontology i korzystaj z DB jako jedynego źródła prawdy."
+            )
+
         api_key = get_required_env(config.api_key_env)
         self._client = genai.Client(api_key=api_key)
-        if predicate_positions:
-            self._predicate_positions = predicate_positions
-        else:
-            warnings.warn(
-                "LLMExtractor: predicate_positions nie zostały przekazane — "
-                "używam statycznego sv.schema.PREDICATE_POSITIONS. "
-                "Przekaż predicate_positions z DBSession aby używać aktywnej ontologii.",
-                stacklevel=2,
-            )
-            from sv.schema import PREDICATE_POSITIONS
-            self._predicate_positions = dict(PREDICATE_POSITIONS)
+        self._predicate_positions = {
+            pred.lower(): [role.upper() for role in roles]
+            for pred, roles in predicate_positions.items()
+        }
         self._system_prompt = build_system_prompt(cluster_schemas, self._predicate_positions)
         self._response_schema = build_response_schema()
         self._schemas = cluster_schemas

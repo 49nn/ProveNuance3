@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 _PREDICATE_PL: dict[str, str] = {
-    # Fakty obserwowane (TextExtractor / LLMExtractor)
+    # Fakty obserwowane z ekstrakcji LLM
     "ORDER_PLACED":                    "Zamówienie złożone",
     "ORDER_ACCEPTED":                  "Zamówienie przyjęte",
     "ORDER_CANCELLED":                 "Zamówienie anulowane",
@@ -176,6 +176,7 @@ def build_user_message(
     proof_run: "ProofRun | None",
     cluster_states: "list[ClusterStateRow] | None",
     entity_map: dict[str, str],
+    cluster_domains: dict[str, list[str]] | None = None,
     grounded: bool = False,
     neural_trace: dict[str, list[NeuralTraceItem]] | None = None,
 ) -> str:
@@ -201,7 +202,7 @@ def build_user_message(
 
     # 2. Właściwości stron
     if cluster_states:
-        lines = [_render_cluster(cs, entity_map) for cs in cluster_states]
+        lines = [_render_cluster(cs, entity_map, cluster_domains) for cs in cluster_states]
         sections.append("## Właściwości stron\n\n" + "\n".join(lines))
 
     # 3. Stwierdzone fakty (z source_id jako proweniencja tekstowa)
@@ -303,31 +304,18 @@ def _render_fact(fact: Fact, entity_map: dict[str, str]) -> str:
     return f"{status_marker} {body}{source_tag}"
 
 
-def _render_cluster(cs: "ClusterStateRow", entity_map: dict[str, str]) -> str:
+def _render_cluster(
+    cs: "ClusterStateRow",
+    entity_map: dict[str, str],
+    cluster_domains: dict[str, list[str]] | None = None,
+) -> str:
     """Konwertuje ClusterStateRow na czytelną linię."""
     name = entity_map.get(cs.entity_id, cs.entity_id)
     cluster_label = _CLUSTER_PL.get(cs.cluster_name, cs.cluster_name)
 
     # Wyznacz wartość z najwyższym logitem
-    schema_domain: list[str] | None = None
-    # Jeśli klaster ma logity — wybierz argmax
     if cs.logits:
-        # Domyślne domeny z ontologii (kolejność z seed_ontology.sql)
-        _DOMAIN_MAP: dict[str, list[str]] = {
-            "customer_type":         ["CONSUMER", "BUSINESS"],
-            "order_status":          ["PLACED", "ACCEPTED", "PAID", "CANCELLED", "DELIVERED", "DISPUTED"],
-            "payment_method":        ["CARD", "TRANSFER", "BLIK", "COD"],
-            "product_type":          ["PHYSICAL", "DIGITAL", "CUSTOM"],
-            "defective":             ["YES", "NO", "UNKNOWN"],
-            "store_pays_return":     ["YES", "NO", "UNKNOWN"],
-            "digital_consent":       ["YES", "NO", "UNKNOWN"],
-            "download_started_flag": ["YES", "NO", "UNKNOWN"],
-            "password_shared":       ["YES", "NO", "UNKNOWN"],
-            "coupon_stackable":      ["YES", "NO"],
-            "account_status":        ["ACTIVE", "BLOCKED"],
-            "chargeback_status":     ["NONE", "OPEN", "RESOLVED_CUSTOMER", "RESOLVED_STORE"],
-        }
-        domain = _DOMAIN_MAP.get(cs.cluster_name)
+        domain = (cluster_domains or {}).get(cs.cluster_name)
         if domain and len(cs.logits) == len(domain):
             best_idx = max(range(len(cs.logits)), key=lambda i: cs.logits[i])
             raw_value = domain[best_idx]

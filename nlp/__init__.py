@@ -1,35 +1,10 @@
 """
-nlp/ — ekstraktor faktów z tekstu polskiego.
-
-Dwa backendy do wyboru przez ProjectConfig:
-  - "regex"  TextExtractor  — pure-regex, brak zewnętrznych zależności (domyślnie)
-  - "llm"    LLMExtractor   — Google Gemini + pętla zwrotna Symbolic Verifier
-
-Przykład użycia (regex — domyślny):
-    from nlp import TextExtractor, ExtractionResult
-    from nn import ClusterSchema
-
-    schemas = [...]
-    extractor = TextExtractor(schemas)
-    result = extractor.extract("...", source_id="case_1")
-    print(result.summary())
-
-Przykład użycia (LLM — przez factory):
-    from config import ProjectConfig
-    from nlp import get_extractor
-
-    cfg = ProjectConfig.load()          # wczytaj project_config.json
-    extractor = get_extractor(schemas, cfg)
-    result = extractor.extract("...", source_id="case_1")
-
-Przełącznik w project_config.json:
-    { "extractor": { "backend": "llm", "gemini_model": "gemini-2.0-flash" } }
+LLM-based NLP entrypoints.
 """
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .extractor import TextExtractor
 from .ontology_builder import (
     OntologyResult,
     build_ontology_prompt,
@@ -48,20 +23,9 @@ def get_extractor(
     config=None,
     year: int | None = None,
     predicate_positions: dict[str, list[str]] | None = None,
-) -> "TextExtractor | LLMExtractor":
+) -> "LLMExtractor":
     """
-    Fabryka ekstraktora na podstawie konfiguracji projektu.
-
-    Parametry:
-        cluster_schemas:  lista ClusterSchema (z DB / seed_ontology)
-        config:           ProjectConfig | ExtractorConfig | None
-                          Jeśli None — używa domyślnego TextExtractor (regex)
-        year:             rok dla dat; jeśli None — pobiera z config.year lub 2026
-
-    Przykład:
-        cfg = ProjectConfig.load()
-        extractor = get_extractor(schemas, cfg)
-        result = extractor.extract(text, source_id="case_1")
+    Return the only supported extractor backend: LLMExtractor.
     """
     from config import ExtractorConfig, ProjectConfig
 
@@ -75,16 +39,14 @@ def get_extractor(
         ext_cfg = config
         resolved_year = year or 2026
 
-    if ext_cfg.backend == "llm":
-        from .llm_extractor import LLMExtractor
-        return LLMExtractor(cluster_schemas, ext_cfg, resolved_year, predicate_positions)
+    if ext_cfg.backend != "llm":
+        raise ValueError("Only backend='llm' is supported.")
 
-    return TextExtractor(cluster_schemas, resolved_year, predicate_positions)
+    from .llm_extractor import LLMExtractor
+    return LLMExtractor(cluster_schemas, ext_cfg, resolved_year, predicate_positions)
 
 
 __all__ = [
-    "TextExtractor",
-    "LLMExtractor",
     "ExtractionResult",
     "get_extractor",
     "OntologyResult",

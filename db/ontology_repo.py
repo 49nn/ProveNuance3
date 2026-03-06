@@ -8,24 +8,35 @@ import json
 import psycopg
 from psycopg.types.json import Jsonb
 
-from nlp.ontology_builder import OntologyResult, clingo_to_head_body
+from nlp.ontology_builder import OntologyResult, head_body_to_clingo
 
 
 def save_ontology(conn: psycopg.Connection, result: OntologyResult) -> None:
     """
-    Zapisuje OntologyResult do tabel ontologicznych.
-
-    Idempotentne — bezpieczne wielokrotne wywołanie (ON CONFLICT DO UPDATE).
-    Kolejność: entity_types → predicate_definitions+roles → cluster_definitions+domain
-               → rule_modules → rules → sources.
-
-    Wywołujący jest odpowiedzialny za commit.
+    Zastępuje całą aktywną ontologię nową wersją wygenerowaną przez LLM.
+    Czyści poprzednią ontologię i dane zależne od niej, ale zostawia cases/sources,
+    aby można było wykonać ponowny ingest na nowych schematach.
     """
+    _clear_existing_ontology(conn)
     _save_entity_types(conn, result)
     _save_predicates(conn, result)
     _save_clusters(conn, result)
     _save_rules(conn, result)
     _save_source(conn, result.source_id)
+
+
+def _clear_existing_ontology(conn: psycopg.Connection) -> None:
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM facts")
+        cur.execute("DELETE FROM cluster_states")
+        cur.execute("DELETE FROM entities")
+        cur.execute("DELETE FROM proof_runs")
+        cur.execute("DELETE FROM case_queries")
+        cur.execute("DELETE FROM rules")
+        cur.execute("DELETE FROM rule_modules")
+        cur.execute("DELETE FROM cluster_definitions")
+        cur.execute("DELETE FROM predicate_definitions")
+        cur.execute("DELETE FROM entity_types")
 
 
 # ---------------------------------------------------------------------------
@@ -116,15 +127,26 @@ def _save_clusters(conn: psycopg.Connection, result: OntologyResult) -> None:
 
             cur.execute(
                 """
-                INSERT INTO cluster_definitions (name, entity_type_id, description, source_span_text)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO cluster_definitions (
+                    name, entity_type_id, entity_role_name, value_role_name, description, source_span_text
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (name) DO UPDATE SET
                     entity_type_id   = EXCLUDED.entity_type_id,
+                    entity_role_name = EXCLUDED.entity_role_name,
+                    value_role_name  = EXCLUDED.value_role_name,
                     description      = EXCLUDED.description,
                     source_span_text = EXCLUDED.source_span_text
                 RETURNING id
                 """,
-                (cl.name, entity_type_id, cl.description, cl.source_span_text),
+                (
+                    cl.name,
+                    entity_type_id,
+                    cl.entity_role,
+                    cl.value_role,
+                    cl.description,
+                    cl.source_span_text,
+                ),
             )
             cluster_id = cur.fetchone()[0]  # type: ignore[index]
 
@@ -152,12 +174,7 @@ def _save_rules(conn: psycopg.Connection, result: OntologyResult) -> None:
     with conn.cursor() as cur:
         for rule in result.rules:
             module_id = _ensure_rule_module(cur, rule.module)
-
-            try:
-                head, body = clingo_to_head_body(rule.clingo_text)
-            except Exception:
-                # Jeśli parser nie radzi sobie z tym clingo_text — pomiń regułę
-                continue
+            clingo_text = rule.clingo_text or head_body_to_clingo(rule.head, rule.body)
 
             cur.execute(
                 """
@@ -182,9 +199,9 @@ def _save_rules(conn: psycopg.Connection, result: OntologyResult) -> None:
                 (
                     rule.rule_id,
                     module_id,
-                    Jsonb(head),
-                    Jsonb(body),
-                    rule.clingo_text,
+                    Jsonb(rule.head),
+                    Jsonb(rule.body),
+                    clingo_text,
                     rule.stratum,
                     rule.source_span_text,
                 ),

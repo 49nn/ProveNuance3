@@ -21,7 +21,6 @@ from nn.graph_builder import ClusterSchema, ClusterStateRow
 from sv.converter import IdRegistry, cluster_to_lp, fact_to_lp, symbol_to_atom
 from sv.proof import ProofRun, build_proof_run, extract_proof_dag, ground_rule
 from sv.runner import build_program, solve
-from sv.schema import DEFAULT_CLUSTER_ROLES, PREDICATE_POSITIONS
 from sv.stratification import validate_stratification
 from sv.types import GroundAtom, VerifyResult
 
@@ -41,8 +40,8 @@ class SymbolicVerifier:
 
     Parametry:
       cluster_schemas:      lista ClusterSchema (do odczytu domain i top-1 wartości)
-      predicate_positions:  kolejność ról pozycyjnych per predykat (z schema.py)
-      cluster_roles:        (entity_role, value_role) per klaster (z schema.py)
+      predicate_positions:  kolejność ról pozycyjnych per predykat z aktywnej ontologii
+      cluster_roles:        (entity_role, value_role) per klaster z aktywnej ontologii
       truth_threshold:      minimalny próg confidence dla faktów T wchodzących do LP
     """
 
@@ -54,8 +53,21 @@ class SymbolicVerifier:
         truth_threshold: float = 0.5,
     ) -> None:
         self.cluster_schemas = {s.name: s for s in cluster_schemas}
-        self.predicate_positions = predicate_positions or PREDICATE_POSITIONS
-        self.cluster_roles = cluster_roles or DEFAULT_CLUSTER_ROLES
+        if not predicate_positions:
+            raise ValueError("SymbolicVerifier wymaga predicate_positions z aktywnej ontologii.")
+        self.predicate_positions = {
+            pred.lower(): [role.upper() for role in roles]
+            for pred, roles in predicate_positions.items()
+        }
+        self.cluster_roles = {
+            name: (schema.resolved_entity_role, schema.resolved_value_role)
+            for name, schema in self.cluster_schemas.items()
+        }
+        if cluster_roles:
+            self.cluster_roles.update({
+                name: (roles[0].upper(), roles[1].upper())
+                for name, roles in cluster_roles.items()
+            })
         self.truth_threshold = truth_threshold
 
     # ------------------------------------------------------------------

@@ -15,11 +15,13 @@ def load_cluster_schemas(conn: psycopg.Connection) -> list[ClusterSchema]:
                 cd.id,
                 cd.name,
                 et.name AS entity_type,
-                ARRAY_AGG(cdv.value ORDER BY cdv.position) AS domain
+                ARRAY_AGG(cdv.value ORDER BY cdv.position) AS domain,
+                cd.entity_role_name,
+                cd.value_role_name
             FROM cluster_definitions cd
             JOIN entity_types et ON et.id = cd.entity_type_id
             JOIN cluster_domain_values cdv ON cdv.cluster_id = cd.id
-            GROUP BY cd.id, cd.name, et.name
+            GROUP BY cd.id, cd.name, et.name, cd.entity_role_name, cd.value_role_name
             ORDER BY cd.id
         """)
         rows = cur.fetchall()
@@ -29,6 +31,8 @@ def load_cluster_schemas(conn: psycopg.Connection) -> list[ClusterSchema]:
             name=row[1],
             entity_type=row[2],
             domain=list(row[3]),
+            entity_role=row[4],
+            value_role=row[5],
         )
         for row in rows
     ]

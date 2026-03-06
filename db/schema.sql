@@ -22,13 +22,15 @@ CREATE TYPE clamp_source_t   AS ENUM ('text', 'memory', 'manual');
 CREATE TABLE entity_types (
     id          SERIAL PRIMARY KEY,
     name        TEXT NOT NULL UNIQUE,
-    description TEXT
+    description TEXT,
+    source_span_text TEXT
 );
 
 CREATE TABLE predicate_definitions (
     id          SERIAL PRIMARY KEY,
     name        TEXT NOT NULL UNIQUE,
-    description TEXT
+    description TEXT,
+    source_span_text TEXT
 );
 
 -- Pozycjonowane role predykatu; entity_type_id=NULL oznacza literał (DATE, AMOUNT, RESULT…)
@@ -45,7 +47,10 @@ CREATE TABLE cluster_definitions (
     id              SERIAL PRIMARY KEY,
     name            TEXT    NOT NULL UNIQUE,
     entity_type_id  INTEGER NOT NULL REFERENCES entity_types(id),
-    description     TEXT
+    entity_role_name TEXT   NOT NULL,
+    value_role_name  TEXT   NOT NULL,
+    description     TEXT,
+    source_span_text TEXT
 );
 
 CREATE TABLE cluster_domain_values (
@@ -275,6 +280,7 @@ CREATE TABLE rules (
 
     enabled     BOOLEAN     NOT NULL DEFAULT TRUE,
     version     INTEGER     NOT NULL DEFAULT 1,
+    source_span_text TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );

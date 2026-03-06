@@ -16,7 +16,6 @@ Przykład użycia:
 
 from sv.proof import ProofRun, ProofStep, build_proof_run
 from sv.runner import build_program, rule_to_lp, solve
-from sv.schema import DEFAULT_CLUSTER_ROLES, PREDICATE_POSITIONS
 from sv.stratification import validate_stratification
 from sv.types import GroundAtom, GroundRule, ProofNode, VerifyResult
 from sv.verifier import SymbolicVerifier
@@ -32,9 +31,6 @@ __all__ = [
     "GroundAtom",
     "GroundRule",
     "ProofNode",
-    # Konfiguracja
-    "DEFAULT_CLUSTER_ROLES",
-    "PREDICATE_POSITIONS",
     "validate_stratification",
     # Niskopoziomowe API (do testów jednostkowych)
     "build_program",

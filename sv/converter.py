@@ -16,7 +16,6 @@ import clingo
 from data_model.fact import Fact
 from nn.graph_builder import ClusterSchema, ClusterStateRow
 from sv._utils import to_clingo_id
-from sv.schema import DEFAULT_CLUSTER_ROLES, PREDICATE_POSITIONS
 from sv.types import GroundAtom
 
 if TYPE_CHECKING:
@@ -71,7 +70,7 @@ def fact_to_lp(
     if fact.truth.confidence is not None and fact.truth.confidence < truth_threshold:
         return None
 
-    positions = predicate_positions or PREDICATE_POSITIONS
+    positions = predicate_positions or {}
     pred = fact.predicate.lower()
     roles = positions.get(pred)
     if roles is None:
@@ -108,9 +107,11 @@ def cluster_to_lp(
     top_idx = max(range(len(state.logits)), key=lambda i: state.logits[i])
     value = schema.domain[top_idx].lower()
 
-    roles = cluster_roles or DEFAULT_CLUSTER_ROLES
-    if state.cluster_name not in roles:
-        return None
+    roles = cluster_roles or {}
+    entity_role, value_role = roles.get(
+        state.cluster_name,
+        (schema.resolved_entity_role, schema.resolved_value_role),
+    )
 
     eid = registry.register(state.entity_id)
     val = registry.register(value)
@@ -142,13 +143,13 @@ def lp_to_atom(
     args_part = args_part.rstrip(")")
     args = [a.strip() for a in args_part.split(",")]
 
-    positions = predicate_positions or PREDICATE_POSITIONS
+    positions = predicate_positions or {}
     roles_n = positions.get(pred)
     if roles_n and len(roles_n) == len(args):
         bindings = tuple(sorted(zip(roles_n, args)))
         return GroundAtom(pred, bindings)
 
-    c_roles = cluster_roles or DEFAULT_CLUSTER_ROLES
+    c_roles = cluster_roles or {}
     if pred in c_roles and len(args) == 2:
         entity_role, value_role = c_roles[pred]
         bindings = tuple(sorted([(entity_role, args[0]), (value_role, args[1])]))
@@ -175,13 +176,13 @@ def symbol_to_atom(
     pred = sym.name
     args = [str(a) for a in sym.arguments]
 
-    positions = predicate_positions or PREDICATE_POSITIONS
+    positions = predicate_positions or {}
     roles_n = positions.get(pred)
     if roles_n and len(roles_n) == len(args):
         bindings = tuple(sorted(zip(roles_n, args)))
         return GroundAtom(pred, bindings)
 
-    c_roles = cluster_roles or DEFAULT_CLUSTER_ROLES
+    c_roles = cluster_roles or {}
     if pred in c_roles and len(args) == 2:
         entity_role, value_role = c_roles[pred]
         bindings = tuple(sorted([(entity_role, args[0]), (value_role, args[1])]))

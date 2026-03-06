@@ -66,6 +66,7 @@ class LLMExplainer:
         facts: list[Fact],
         proof_run: "ProofRun | None" = None,
         cluster_states: "list[ClusterStateRow] | None" = None,
+        cluster_schemas: list[Any] | None = None,
         entities: list[Entity] | None = None,
         neural_trace: dict[str, list[NeuralTraceItem]] | None = None,
     ) -> str:
@@ -85,6 +86,7 @@ class LLMExplainer:
             str — odpowiedź Gemini w naturalnym języku
         """
         entity_map = _build_entity_map(entities)
+        cluster_domains = _build_cluster_domains(cluster_schemas)
         filtered_facts = _filter_facts(facts, self._config.max_facts)
         user_msg = build_user_message(
             case_text=case_text,
@@ -92,6 +94,7 @@ class LLMExplainer:
             proof_run=proof_run,
             cluster_states=cluster_states,
             entity_map=entity_map,
+            cluster_domains=cluster_domains,
             grounded=self._config.grounded,
             neural_trace=neural_trace,
         )
@@ -112,6 +115,7 @@ class LLMExplainer:
         facts: list[Fact],
         proof_run: "ProofRun | None" = None,
         cluster_states: "list[ClusterStateRow] | None" = None,
+        cluster_schemas: list[Any] | None = None,
         entities: list[Entity] | None = None,
         neural_trace: dict[str, list[NeuralTraceItem]] | None = None,
     ) -> dict[str, str]:
@@ -124,6 +128,7 @@ class LLMExplainer:
             print(req["user_message"])
         """
         entity_map = _build_entity_map(entities)
+        cluster_domains = _build_cluster_domains(cluster_schemas)
         filtered_facts = _filter_facts(facts, self._config.max_facts)
         user_msg = build_user_message(
             case_text=case_text,
@@ -131,6 +136,7 @@ class LLMExplainer:
             proof_run=proof_run,
             cluster_states=cluster_states,
             entity_map=entity_map,
+            cluster_domains=cluster_domains,
             grounded=self._config.grounded,
             neural_trace=neural_trace,
         )
@@ -152,6 +158,16 @@ def _build_entity_map(entities: list[Entity] | None) -> dict[str, str]:
     if not entities:
         return {}
     return {e.entity_id: e.canonical_name for e in entities}
+
+
+def _build_cluster_domains(cluster_schemas: list[Any] | None) -> dict[str, list[str]]:
+    if not cluster_schemas:
+        return {}
+    return {
+        str(getattr(schema, "name")): list(getattr(schema, "domain"))
+        for schema in cluster_schemas
+        if getattr(schema, "name", None) and getattr(schema, "domain", None)
+    }
 
 
 def _filter_facts(facts: list[Fact], max_facts: int) -> list[Fact]:

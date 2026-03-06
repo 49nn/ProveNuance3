@@ -46,6 +46,8 @@ class PredicateSpec:
 class ClusterSpec:
     name: str
     entity_type: str
+    entity_role: str
+    value_role: str
     domain: list[str] = field(default_factory=list)
     description: str = ""
     source_span_text: str | None = None
@@ -55,7 +57,9 @@ class ClusterSpec:
 class RuleSpec:
     rule_id: str
     module: str
-    clingo_text: str
+    head: dict[str, Any]
+    body: list[dict[str, Any]] = field(default_factory=list)
+    clingo_text: str | None = None
     stratum: int = 0
     source_span_text: str | None = None
 
@@ -82,18 +86,37 @@ class OntologyResult:
 # ---------------------------------------------------------------------------
 
 _FEW_SHOT_RULES = """\
-Przykłady par (przepis → clingo_text):
+Przykłady reguł strukturalnych:
 
   Przepis: "Umowa zostaje zawarta z chwilą potwierdzenia przyjęcia Zamówienia."
-  clingo_text: contract_formed(O) :- order_accepted(_,O,_).
+  head: {"predicate":"contract_formed","args":[{"role":"ORDER","term":{"var":"O"}}]}
+  body: [{"literal_type":"pos","predicate":"order_accepted","args":[
+    {"role":"STORE","term":{"var":"_"}},
+    {"role":"ORDER","term":{"var":"O"}},
+    {"role":"DATE","term":{"var":"_"}}
+  ]}]
   stratum: 0
 
   Przepis: "Konsument może odstąpić w ciągu 14 dni od doręczenia, chyba że towar jest cyfrowy i pobieranie zostało rozpoczęte."
-  clingo_text: can_withdraw(C,O) :- customer_type(C,consumer), delivered(O,_,DD), withdrawal_statement_submitted(C,O,_,DS), within_14_days(DS,DD), not ab_withdraw(C,O).
+  head: {"predicate":"can_withdraw","args":[
+    {"role":"CUSTOMER","term":{"var":"C"}},
+    {"role":"ORDER","term":{"var":"O"}}
+  ]}
+  body: [{"literal_type":"pos","predicate":"customer_type","args":[
+    {"role":"CUSTOMER","term":{"var":"C"}},
+    {"role":"TYPE","term":{"const":"consumer"}}
+  ]}, ...]
   stratum: 2
 
   Przepis: "Wyjątek: treść cyfrowa + zgoda + pobieranie."
-  clingo_text: ab_withdraw(C,O) :- product_type(P,digital), order_contains(O,P), digital_consent(O,yes), download_started_flag(O,yes).
+  head: {"predicate":"ab_withdraw","args":[
+    {"role":"CUSTOMER","term":{"var":"C"}},
+    {"role":"ORDER","term":{"var":"O"}}
+  ]}
+  body: [{"literal_type":"pos","predicate":"product_type","args":[
+    {"role":"PRODUCT","term":{"var":"P"}},
+    {"role":"TYPE","term":{"const":"digital"}}
+  ]}, ...]
   stratum: 1
 
 Konwencje Clingo:
@@ -126,12 +149,15 @@ def build_ontology_prompt(regulatory_text: str) -> str:
         "Enumy/kategorie przypisane do encji — każdy klaster = zmienna dyskretna z softmax.",
         "Przykłady: customer_type(CUSTOMER) ∈ {CONSUMER, BUSINESS}",
         "           payment_method(ORDER) ∈ {CARD, TRANSFER, BLIK, COD}",
-        "Dla każdego podaj name (snake_case), entity_type, domain (lista wartości UPPER_CASE),",
-        "description i source_span_text (cytat wyliczający wartości).",
+        "Dla każdego podaj name (snake_case), entity_type, entity_role, value_role,",
+        "domain (lista wartości UPPER_CASE), description i source_span_text.",
         "",
         "## REGUŁY HORN + NAF",
         _FEW_SHOT_RULES,
-        "Dla każdej reguły podaj rule_id, module (snake_case), clingo_text, stratum i source_span_text.",
+        "Dla każdej reguły podaj rule_id, module (snake_case), head, body, stratum i source_span_text.",
+        "Predicate names w head/body zapisuj w lower_snake_case zgodnym z runtime LP.",
+        "Role w head/body muszą być nazwane semantycznie (ORDER, CUSTOMER, TYPE, VALUE), nigdy ARG0/ARG1.",
+        "Stałe w term.const zapisuj w lower_snake_case zgodnym z LP.",
         "",
         "## WAŻNE ZASADY",
         "1. Dla KAŻDEGO elementu podaj source_span_text: dosłowny, minimalny cytat z regulaminu",
@@ -151,6 +177,42 @@ def build_ontology_prompt(regulatory_text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def build_ontology_schema() -> dict[str, Any]:
+    term_schema = {
+        "type": "OBJECT",
+        "properties": {
+            "var": {"type": "STRING"},
+            "const": {"type": "STRING"},
+        },
+    }
+
+    rule_arg_schema = {
+        "type": "OBJECT",
+        "properties": {
+            "role": {"type": "STRING"},
+            "term": term_schema,
+        },
+        "required": ["role", "term"],
+    }
+
+    rule_head_schema = {
+        "type": "OBJECT",
+        "properties": {
+            "predicate": {"type": "STRING"},
+            "args": {"type": "ARRAY", "items": rule_arg_schema},
+        },
+        "required": ["predicate", "args"],
+    }
+
+    rule_body_literal_schema = {
+        "type": "OBJECT",
+        "properties": {
+            "literal_type": {"type": "STRING"},
+            "predicate": {"type": "STRING"},
+            "args": {"type": "ARRAY", "items": rule_arg_schema},
+        },
+        "required": ["literal_type", "predicate", "args"],
+    }
+
     role_schema = {
         "type": "OBJECT",
         "properties": {
@@ -187,11 +249,13 @@ def build_ontology_schema() -> dict[str, Any]:
         "properties": {
             "name":             {"type": "STRING"},
             "entity_type":      {"type": "STRING"},
+            "entity_role":      {"type": "STRING"},
+            "value_role":       {"type": "STRING"},
             "domain":           {"type": "ARRAY", "items": {"type": "STRING"}},
             "description":      {"type": "STRING"},
             "source_span_text": {"type": "STRING"},
         },
-        "required": ["name", "entity_type", "domain"],
+        "required": ["name", "entity_type", "entity_role", "value_role", "domain"],
     }
 
     rule_schema = {
@@ -199,11 +263,13 @@ def build_ontology_schema() -> dict[str, Any]:
         "properties": {
             "rule_id":          {"type": "STRING"},
             "module":           {"type": "STRING"},
+            "head":             rule_head_schema,
+            "body":             {"type": "ARRAY", "items": rule_body_literal_schema},
             "clingo_text":      {"type": "STRING"},
             "stratum":          {"type": "INTEGER"},
             "source_span_text": {"type": "STRING"},
         },
-        "required": ["rule_id", "module", "clingo_text"],
+        "required": ["rule_id", "module", "head", "body"],
     }
 
     return {
@@ -267,7 +333,9 @@ def parse_ontology_response(data: dict[str, Any], source_id: str) -> OntologyRes
     for c in data.get("clusters", []):
         name = str(c.get("name", "")).strip().lower()
         entity_type = str(c.get("entity_type", "")).strip().upper()
-        if not name or not entity_type or name in seen_cl:
+        entity_role = str(c.get("entity_role", "")).strip().upper()
+        value_role = str(c.get("value_role", "")).strip().upper()
+        if not name or not entity_type or not entity_role or not value_role or name in seen_cl:
             continue
         domain = [str(v).strip().upper() for v in c.get("domain", []) if str(v).strip()]
         if not domain:
@@ -276,6 +344,8 @@ def parse_ontology_response(data: dict[str, Any], source_id: str) -> OntologyRes
         clusters.append(ClusterSpec(
             name=name,
             entity_type=entity_type,
+            entity_role=entity_role,
+            value_role=value_role,
             domain=domain,
             description=str(c.get("description", "")).strip(),
             source_span_text=_opt_str(c, "source_span_text"),
@@ -286,13 +356,17 @@ def parse_ontology_response(data: dict[str, Any], source_id: str) -> OntologyRes
     for r in data.get("rules", []):
         rule_id = str(r.get("rule_id", "")).strip()
         module = str(r.get("module", "unknown")).strip().lower()
-        clingo_text = str(r.get("clingo_text", "")).strip()
-        if not rule_id or not clingo_text or rule_id in seen_rid:
+        head = _normalize_rule_head(r.get("head"))
+        body = _normalize_rule_body(r.get("body"))
+        if not rule_id or head is None or body is None or rule_id in seen_rid:
             continue
         seen_rid.add(rule_id)
+        clingo_text = str(r.get("clingo_text", "")).strip() or head_body_to_clingo(head, body)
         rules.append(RuleSpec(
             rule_id=rule_id,
             module=module,
+            head=head,
+            body=body,
             clingo_text=clingo_text,
             stratum=int(r.get("stratum", 0)),
             source_span_text=_opt_str(r, "source_span_text"),
@@ -336,6 +410,18 @@ def clingo_to_head_body(clingo_text: str) -> tuple[dict[str, Any], list[dict[str
     body = _parse_body(body_part.strip()) if body_part else []
 
     return head, body
+
+
+def head_body_to_clingo(
+    head: dict[str, Any],
+    body: list[dict[str, Any]],
+) -> str:
+    head_text = _rule_atom_to_clingo(head)
+    if not body:
+        return f"{head_text}."
+
+    body_text = ", ".join(_rule_literal_to_clingo(literal) for literal in body)
+    return f"{head_text} :- {body_text}."
 
 
 def _parse_atom_to_head(atom_str: str) -> dict[str, Any]:
@@ -407,6 +493,98 @@ def _term_dict(token: str) -> dict[str, str]:
     if t == "_" or (t and t[0].isupper()):
         return {"var": t}
     return {"const": t}
+
+
+def _normalize_rule_head(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    predicate = str(raw.get("predicate", "")).strip().lower()
+    args_raw = raw.get("args")
+    if not predicate or not isinstance(args_raw, list):
+        return None
+
+    args: list[dict[str, Any]] = []
+    for arg in args_raw:
+        normalized = _normalize_rule_arg(arg)
+        if normalized is None:
+            return None
+        args.append(normalized)
+    return {"predicate": predicate, "args": args}
+
+
+def _normalize_rule_body(raw: Any) -> list[dict[str, Any]] | None:
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        return None
+
+    body: list[dict[str, Any]] = []
+    for literal in raw:
+        if not isinstance(literal, dict):
+            return None
+        literal_type = str(literal.get("literal_type", "")).strip().lower()
+        predicate = str(literal.get("predicate", "")).strip().lower()
+        args_raw = literal.get("args")
+        if literal_type not in {"pos", "naf"} or not predicate or not isinstance(args_raw, list):
+            return None
+
+        args: list[dict[str, Any]] = []
+        for arg in args_raw:
+            normalized = _normalize_rule_arg(arg)
+            if normalized is None:
+                return None
+            args.append(normalized)
+
+        body.append({
+            "literal_type": literal_type,
+            "predicate": predicate,
+            "args": args,
+        })
+    return body
+
+
+def _normalize_rule_arg(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    role = str(raw.get("role", "")).strip().upper()
+    term = _normalize_term(raw.get("term"))
+    if not role or term is None:
+        return None
+    return {"role": role, "term": term}
+
+
+def _normalize_term(raw: Any) -> dict[str, str] | None:
+    if not isinstance(raw, dict):
+        return None
+    var = raw.get("var")
+    const = raw.get("const")
+    if bool(var) == bool(const):
+        return None
+    if var:
+        return {"var": str(var).strip()}
+    return {"const": str(const).strip().lower()}
+
+
+def _rule_atom_to_clingo(atom: dict[str, Any]) -> str:
+    predicate = str(atom.get("predicate", "")).strip().lower()
+    args = atom.get("args", [])
+    if not args:
+        return predicate
+    rendered = ",".join(_term_to_clingo(arg["term"]) for arg in args)
+    return f"{predicate}({rendered})"
+
+
+def _rule_literal_to_clingo(literal: dict[str, Any]) -> str:
+    atom = _rule_atom_to_clingo(literal)
+    if literal.get("literal_type") == "naf":
+        return f"not {atom}"
+    return atom
+
+
+def _term_to_clingo(term: dict[str, str]) -> str:
+    if "var" in term:
+        return term["var"]
+    return term["const"].lower()
 
 
 # ---------------------------------------------------------------------------

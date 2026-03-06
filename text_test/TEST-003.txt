@@ -1,5 +1,0 @@
-Firma BigCorp S.A. (klient biznesowy) zlozyla zamowienie O5003 dnia 14 stycznia 2026 na 10 drukarek biurowych (produkt fizyczny P5003). Sklep OfficeGear Sp. z o.o. przyjal zamowienie 14 stycznia 2026. Klient zaplacil przelewem (PAY5003) kwote 18 000,00 zl.
-
-Towar dostarczono (DEL5003) dnia 20 stycznia 2026. Firma BigCorp zazadala zwrotu powolujac sie na prawo do odstapienia (STMT5003) dnia 22 stycznia 2026.
-
-Sklep odmowil – umowa B2B nie podlega konsumenckiemu prawu do odstapienia.

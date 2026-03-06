@@ -1492,8 +1492,7 @@ def cmd_llm_prompt(args: argparse.Namespace) -> None:
     console.print(Panel(
         system_prompt,
         title=f"[bold cyan]System Prompt[/bold cyan]  "
-              f"[dim](model: {cfg.extractor.gemini_model}, "
-              f"backend: {cfg.extractor.backend})[/dim]",
+              f"[dim](model: {cfg.extractor.gemini_model})[/dim]",
         border_style="cyan",
         expand=True,
     ))
@@ -1585,11 +1584,6 @@ def cmd_ingest_text(args: argparse.Namespace) -> None:
     title = args.title or case_id
     cfg = ProjectConfig.load()
 
-    # --backend nadpisuje konfigurację z pliku
-    if getattr(args, "backend", None):
-        from dataclasses import replace as dc_replace
-        cfg = dc_replace(cfg, extractor=dc_replace(cfg.extractor, backend=args.backend))
-
     with DBSession.connect() as session:
         schemas = session.load_cluster_schemas()
         predicate_positions = session.load_predicate_positions()
@@ -1601,9 +1595,7 @@ def cmd_ingest_text(args: argparse.Namespace) -> None:
         _api_key = os.environ.get(cfg.extractor.api_key_env, "")
         _key_hint = f"…{_api_key[-4:]}" if _api_key else "BRAK"
         console.print(
-            f"[dim]Ekstrakcja ({cfg.extractor.backend}, model={cfg.extractor.gemini_model}, key={_key_hint}) → {case_id}...[/dim]"
-            if cfg.extractor.backend == "llm" else
-            f"[dim]Ekstrakcja ({cfg.extractor.backend}) → {case_id}...[/dim]"
+            f"[dim]Ekstrakcja (llm, model={cfg.extractor.gemini_model}, key={_key_hint}) -> {case_id}...[/dim]"
         )
         extractor = get_extractor(
             schemas,
@@ -1638,7 +1630,6 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
 
     Tryby:
       pn3 ingest-folder text_cases/
-      pn3 ingest-folder text_cases/ --backend llm
       pn3 ingest-folder text_cases/ --dry-run
       pn3 ingest-folder text_cases/ --pattern "TC-*.txt"
       pn3 ingest-folder text_cases/ --workers 8
@@ -1663,18 +1654,11 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
         return
 
     cfg = ProjectConfig.load()
-    if getattr(args, "backend", None):
-        from dataclasses import replace as dc_replace
-        cfg = dc_replace(cfg, extractor=dc_replace(cfg.extractor, backend=args.backend))
-
     workers = getattr(args, "workers", 8) or 8
 
     _api_key = os.environ.get(cfg.extractor.api_key_env, "")
     _key_hint = f"…{_api_key[-4:]}" if _api_key else "BRAK"
-    backend_info = (
-        f"llm, model={cfg.extractor.gemini_model}, key={_key_hint}"
-        if cfg.extractor.backend == "llm" else cfg.extractor.backend
-    )
+    backend_info = f"llm, model={cfg.extractor.gemini_model}, key={_key_hint}"
     console.print(
         f"[dim]Folder: {folder}  |  pliki: {len(files)}  |  "
         f"backend: {backend_info}  |  workers: {workers}[/dim]"
@@ -1708,7 +1692,7 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
         return
 
     # ── Faza 2: ekstrakcja równoległa ─────────────────────────────────────────
-    # Każdy wątek tworzy własny ekstraktor – dla llm osobna sesja HTTP, dla regex bezstanowy.
+    # Każdy wątek tworzy własny ekstraktor – osobna sesja HTTP do LLM.
     print_lock = threading.Lock()
 
     def _extract_one(task: tuple[str, str, str]):
@@ -2132,6 +2116,7 @@ def cmd_explain(args: argparse.Namespace) -> None:
     cfg = ProjectConfig.load()
 
     with DBSession.connect() as session:
+        schemas = session.load_cluster_schemas()
         entities, facts, _rules, cluster_states = session.load_case(case_id)
 
         case_text = _load_case_text_from_db(session.conn, case_id)
@@ -2165,6 +2150,7 @@ def cmd_explain(args: argparse.Namespace) -> None:
             facts=facts,
             proof_run=proof_run,
             cluster_states=cluster_states,
+            cluster_schemas=schemas,
             entities=entities,
             neural_trace=neural_trace,
         )
@@ -2205,6 +2191,7 @@ def cmd_explain(args: argparse.Namespace) -> None:
         facts=facts,
         proof_run=proof_run,
         cluster_states=cluster_states,
+        cluster_schemas=schemas,
         entities=entities,
         neural_trace=neural_trace,
     )
@@ -2273,7 +2260,7 @@ def cmd_gen_ontology(args: argparse.Namespace) -> None:
 
     _key_hint = f"…{_api_key[-4:]}"
     console.print(
-        f"[dim]gen-ontology (model={cfg.extractor.gemini_model}, key={_key_hint}) "
+        f"[dim]gen-ontology replace (model={cfg.extractor.gemini_model}, key={_key_hint}) "
         f"source_id={source_id}...[/dim]"
     )
 
@@ -2319,7 +2306,10 @@ def cmd_gen_ontology(args: argparse.Namespace) -> None:
     with DBSession.connect() as session:
         session.save_ontology(result)
 
-    console.print(f"[bold green]gen-ontology completed[/bold green]: {result.summary()}")
+    console.print(
+        f"[bold green]gen-ontology completed[/bold green]: {result.summary()} "
+        f"(active ontology replaced)"
+    )
     _print_ontology_tables(result)
 
 
@@ -2653,9 +2643,9 @@ def main() -> None:
             )
             cmd_parser.add_argument(
                 "--backend",
-                choices=["regex", "llm"],
+                choices=["llm"],
                 default=None,
-                help="Backend ekstrakcji: regex (domyślnie z config) lub llm (Gemini).",
+                help="Backend ekstrakcji: tylko llm (Gemini).",
             )
         elif name == "ingest-folder":
             cmd_parser.add_argument("folder", help="Ścieżka do folderu z plikami .txt")
@@ -2667,9 +2657,9 @@ def main() -> None:
             )
             cmd_parser.add_argument(
                 "--backend",
-                choices=["regex", "llm"],
+                choices=["llm"],
                 default=None,
-                help="Backend ekstrakcji: regex (domyślnie z config) lub llm (Gemini).",
+                help="Backend ekstrakcji: tylko llm (Gemini).",
             )
             cmd_parser.add_argument(
                 "--dry-run",

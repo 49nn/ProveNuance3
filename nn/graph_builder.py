@@ -38,10 +38,20 @@ class ClusterSchema:
     name: str          # np. "customer_type"
     entity_type: str   # np. "CUSTOMER"
     domain: list[str]  # np. ["CONSUMER", "BUSINESS"]
+    entity_role: str | None = None
+    value_role: str | None = None
 
     @property
     def dim(self) -> int:
         return len(self.domain)
+
+    @property
+    def resolved_entity_role(self) -> str:
+        return (self.entity_role or self.entity_type).upper()
+
+    @property
+    def resolved_value_role(self) -> str:
+        return (self.value_role or "VALUE").upper()
 
 
 @dataclass
@@ -417,7 +427,7 @@ class GraphBuilder:
 
                     target_entity_id: str | None = None
                     for head_arg in rule.head.args:
-                        if head_arg.role.upper() != dst_schema.entity_type.upper():
+                        if head_arg.role.upper() != dst_schema.resolved_entity_role:
                             continue
                         term = head_arg.term
                         if isinstance(term, VarTerm):

@@ -1,5 +1,5 @@
 """
-Utilities for aligning extracted facts to the currently active ontology.
+Strict alignment of extracted facts to the active ontology.
 """
 from __future__ import annotations
 
@@ -28,51 +28,6 @@ _SYNTHETIC_ENTITY_TYPES: dict[str, str] = {
     "PROD_": "PRODUCT",
 }
 
-_ROLE_ALIASES: dict[str, tuple[str, ...]] = {
-    "METHOD": ("PAYMENT_METHOD",),
-    "PAYMENT_METHOD": ("METHOD",),
-    "TYPE": ("VALUE",),
-    "VALUE": ("TYPE",),
-}
-
-_FACT_ALIASES: dict[str, tuple[str, ...]] = {
-    "ORDER_ACCEPTED": (
-        "ORDER_CONFIRMED_BY_STORE",
-        "STORE_CONFIRMED_ORDER",
-        "ORDER_CONFIRMED",
-    ),
-    "DELIVERED": ("ORDER_DELIVERED",),
-    "WITHDRAWAL_STATEMENT_SUBMITTED": (
-        "WITHDRAWAL_SUBMITTED",
-        "CUSTOMER_SUBMITTED_WITHDRAWAL",
-    ),
-    "REFUND_ISSUED": ("REFUND_MADE", "STORE_REFUNDED_ORDER"),
-    "RETURNED": ("ORDER_RETURNED",),
-    "RETURN_PROOF_PROVIDED": ("RETURN_SHIPMENT_PROOF_PROVIDED",),
-    "COMPLAINT_SUBMITTED": ("CUSTOMER_SUBMITTED_COMPLAINT",),
-    "COMPLAINT_RESPONSE_SENT": ("STORE_RESPONDED_TO_COMPLAINT",),
-    "ACCOUNT_BLOCKED": ("ACCOUNT_IS_BLOCKED",),
-    "CHARGEBACK_OPENED": ("CHARGEBACK_WAS_OPENED",),
-}
-
-_CLUSTER_VALUE_ALIASES: dict[tuple[str, str], tuple[str, ...]] = {
-    ("customer_type", "CONSUMER"): ("CUSTOMER_IS_CONSUMER",),
-    ("customer_type", "BUSINESS"): ("CUSTOMER_IS_BUSINESS",),
-    ("order_status", "ACCEPTED"): ("ORDER_CONFIRMED_BY_STORE",),
-    ("order_status", "PAID"): ("ORDER_IS_PAID",),
-    ("order_status", "DELIVERED"): ("ORDER_DELIVERED",),
-    ("defective", "YES"): ("PRODUCT_IS_DEFECTIVE", "ORDER_IS_DEFECTIVE"),
-    ("store_pays_return", "YES"): (
-        "STORE_AGREED_TO_COVER_RETURN_COST",
-        "STORE_COVERS_RETURN_COST",
-    ),
-    ("digital_consent", "YES"): ("DIGITAL_CONSENT_WAS_GIVEN",),
-    ("download_started_flag", "YES"): ("DOWNLOAD_STARTED", "DIGITAL_DOWNLOAD_STARTED"),
-    ("account_status", "BLOCKED"): ("ACCOUNT_IS_BLOCKED",),
-    ("coupon_stackable", "NO"): ("COUPON_IS_NOT_STACKABLE",),
-    ("password_shared", "YES"): ("PASSWORD_WAS_SHARED",),
-}
-
 
 def align_extraction_to_ontology(
     result: ExtractionResult,
@@ -90,56 +45,30 @@ def align_extraction_to_ontology(
     if not normalized_positions:
         return result
 
-    schema_map = {getattr(schema, "name"): schema for schema in cluster_schemas}
-
+    allowed_clusters = {getattr(schema, "name") for schema in cluster_schemas}
     aligned_facts: list[Fact] = []
     seen: set[tuple[str, tuple[tuple[str, str], ...]]] = set()
 
     for fact in result.facts:
-        direct = _project_fact(
+        projected = _project_fact(
             source_fact=fact,
             target_predicate=_norm_name(fact.predicate),
             predicate_positions=normalized_positions,
             year=year,
         )
-        if direct is not None:
-            _append_fact(aligned_facts, seen, direct)
+        if projected is not None:
+            _append_fact(aligned_facts, seen, projected)
 
-        for alias in _FACT_ALIASES.get(fact.predicate.upper(), ()):
-            projected = _project_fact(
-                source_fact=fact,
-                target_predicate=_norm_name(alias),
-                predicate_positions=normalized_positions,
-                year=year,
-            )
-            if projected is not None:
-                _append_fact(aligned_facts, seen, projected)
-
-    for cluster_state in result.cluster_states:
-        schema = schema_map.get(cluster_state.cluster_name)
-        if schema is None:
-            continue
-        cluster_value = _cluster_value(cluster_state.logits, list(schema.domain))
-        cluster_aliases = _CLUSTER_VALUE_ALIASES.get(
-            (_norm_name(cluster_state.cluster_name), cluster_value),
-            (),
-        )
-        for alias in cluster_aliases:
-            fact = _fact_from_cluster_alias(
-                source_id=result.source_id,
-                cluster_state=cluster_state,
-                target_predicate=_norm_name(alias),
-                predicate_positions=normalized_positions,
-                year=year,
-            )
-            if fact is not None:
-                _append_fact(aligned_facts, seen, fact)
-
+    filtered_cluster_states = [
+        cluster_state
+        for cluster_state in result.cluster_states
+        if cluster_state.cluster_name in allowed_clusters
+    ]
     entities = _ensure_entities(result.entities, aligned_facts, result.source_id, year)
     return ExtractionResult(
         entities=entities,
         facts=aligned_facts,
-        cluster_states=result.cluster_states,
+        cluster_states=filtered_cluster_states,
         source_id=result.source_id,
     )
 
@@ -154,10 +83,7 @@ def _project_fact(
     if not target_roles:
         return None
 
-    arg_map = {
-        arg.role.upper(): arg
-        for arg in source_fact.args
-    }
+    arg_map = {arg.role.upper(): arg for arg in source_fact.args}
     bindings: list[RoleArg] = []
     for role in target_roles:
         binding = _resolve_role_binding(role, arg_map)
@@ -175,102 +101,13 @@ def _project_fact(
     )
 
 
-def _fact_from_cluster_alias(
-    source_id: str,
-    cluster_state,
-    target_predicate: str,
-    predicate_positions: dict[str, list[str]],
-    year: int,
-) -> Fact | None:
-    target_roles = predicate_positions.get(target_predicate)
-    if not target_roles:
-        return None
-
-    # Each cluster contributes its entity_id under the role matching its primary
-    # entity type. ORDER only applies to order-scoped clusters; non-order clusters
-    # (account, coupon, customer, product) must be excluded to avoid wrong bindings.
-    # When adding a new cluster, update this exclusion set.
-    _NON_ORDER_CLUSTERS = {"coupon_stackable", "account_status", "customer_type", "product_type"}
-    context = {
-        "ORDER": cluster_state.entity_id if cluster_state.cluster_name not in _NON_ORDER_CLUSTERS else None,
-        "ACCOUNT": cluster_state.entity_id if cluster_state.cluster_name == "account_status" else None,
-        "COUPON": cluster_state.entity_id if cluster_state.cluster_name == "coupon_stackable" else None,
-        "CUSTOMER": cluster_state.entity_id if cluster_state.cluster_name == "customer_type" else None,
-        "PRODUCT": cluster_state.entity_id if cluster_state.cluster_name == "product_type" else None,
-    }
-    bindings: list[RoleArg] = []
-    for role in target_roles:
-        binding = _resolve_context_role_binding(role, context)
-        if binding is None:
-            return None
-        bindings.append(RoleArg(role=role, **binding))
-
-    return _make_fact(
-        source_id=source_id,
-        predicate=target_predicate.upper(),
-        args=bindings,
-        span=cluster_state.source_span or Span(),
-        extractor="OntologyAligner",
-        year=year,
-    )
-
-
 def _resolve_role_binding(role: str, arg_map: dict[str, RoleArg]) -> dict[str, str] | None:
     direct = arg_map.get(role)
     if direct is not None:
         return _to_binding(direct)
 
-    for alias in _ROLE_ALIASES.get(role, ()):
-        aliased = arg_map.get(alias)
-        if aliased is not None:
-            return _to_binding(aliased)
-
     if role in _IMPLICIT_BY_ROLE:
         return {"entity_id": _IMPLICIT_BY_ROLE[role]}
-
-    order_arg = arg_map.get("ORDER")
-    if order_arg and order_arg.entity_id:
-        if role == "PAYMENT":
-            return {"entity_id": f"PAY_{order_arg.entity_id}"}
-        if role == "DELIVERY":
-            return {"entity_id": f"DEL_{order_arg.entity_id}"}
-        if role == "STATEMENT":
-            return {"entity_id": f"STMT_{order_arg.entity_id}"}
-        if role == "RETURN_SHIPMENT":
-            return {"entity_id": f"RET_{order_arg.entity_id}"}
-        if role == "PRODUCT":
-            product_arg = arg_map.get("PRODUCT")
-            return {"entity_id": product_arg.entity_id} if product_arg and product_arg.entity_id else {
-                "entity_id": f"PROD_{order_arg.entity_id}"
-            }
-
-    return None
-
-
-def _resolve_context_role_binding(
-    role: str,
-    context: dict[str, str | None],
-) -> dict[str, str] | None:
-    value = context.get(role)
-    if value:
-        return {"entity_id": value}
-
-    if role in _IMPLICIT_BY_ROLE:
-        return {"entity_id": _IMPLICIT_BY_ROLE[role]}
-
-    order_id = context.get("ORDER")
-    if order_id:
-        if role == "PRODUCT":
-            return {"entity_id": f"PROD_{order_id}"}
-        if role == "PAYMENT":
-            return {"entity_id": f"PAY_{order_id}"}
-        if role == "DELIVERY":
-            return {"entity_id": f"DEL_{order_id}"}
-        if role == "STATEMENT":
-            return {"entity_id": f"STMT_{order_id}"}
-        if role == "RETURN_SHIPMENT":
-            return {"entity_id": f"RET_{order_id}"}
-
     return None
 
 
@@ -322,9 +159,10 @@ def _append_fact(
             )
         ),
     )
-    if key not in seen:
-        seen.add(key)
-        facts.append(fact)
+    if key in seen:
+        return
+    seen.add(key)
+    facts.append(fact)
 
 
 def _ensure_entities(
@@ -340,20 +178,17 @@ def _ensure_entities(
         for arg in fact.args:
             if not arg.entity_id or arg.entity_id in seen:
                 continue
-            etype = _synthetic_entity_type(arg.entity_id)
-            if etype is None:
+            entity_type = _synthetic_entity_type(arg.entity_id)
+            if entity_type is None:
                 continue
             seen.add(arg.entity_id)
-            out.append(
-                Entity(
-                    entity_id=arg.entity_id,
-                    type=etype,
-                    canonical_name=arg.entity_id,
-                    created_at=_stable_timestamp(year, source_id, "entity", etype, arg.entity_id),
-                    provenance=[],
-                )
-            )
-
+            out.append(Entity(
+                entity_id=arg.entity_id,
+                type=entity_type,
+                canonical_name=arg.entity_id,
+                created_at=_stable_timestamp(year, source_id, "entity", entity_type, arg.entity_id),
+                provenance=[],
+            ))
     return out
 
 
@@ -381,15 +216,6 @@ def _first_span(fact: Fact) -> Span:
     if fact.source and fact.source.spans:
         return fact.source.spans[0]
     return Span()
-
-
-def _cluster_value(logits: list[float], domain: list[str]) -> str:
-    if not logits or not domain:
-        return ""
-    best_idx = max(range(len(logits)), key=logits.__getitem__)
-    if best_idx >= len(domain):
-        return ""
-    return str(domain[best_idx]).upper()
 
 
 def _norm_name(name: str) -> str:

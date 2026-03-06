@@ -1,5 +1,0 @@
-Piotr Wojcik (konsument) zlozyl zamowienie O5004 dnia 16 stycznia 2026 na e-book (produkt cyfrowy P5004). Sklep EbookStore Sp. z o.o. uzyskal zgode klienta na natychmiastowe wykonanie umowy (digital_consent=YES). Klient zaplacil karta (PAY5004) kwote 39,00 zl.
-
-Klient pobral e-book (download_started_flag=YES). Klient zlozyl oswiadczenie o odstapeniu (STMT5004) dnia 18 stycznia 2026.
-
-Sklep odmowil zwrotu – pobieranie nastapilo po wyrazeniu zgody.

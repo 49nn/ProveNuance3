@@ -1,5 +1,0 @@
-Joanna Nowak (konsument) zlozyla zamowienie O5007 dnia 22 stycznia 2026 na odzie sportow (produkt fizyczny P5007) za 600,00 zl. Zastosowala kupon SPORT20 (20% rabatu, coupon_stackable=YES). Po rabacie 120,00 zl zaplacila karta (PAY5007) 480,00 zl.
-
-Towar dostarczono (DEL5007) dnia 27 stycznia 2026. Klientka zlozyla oswiadczenie o odstapeniu (STMT5007) dnia 5 lutego 2026 – 9 dni po dostawie.
-
-Sklep SportStyle Sp. z o.o. przyjal zwrot i zwrocil 480,00 zl (kwota faktycznie zaplacona).

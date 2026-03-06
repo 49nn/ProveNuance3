@@ -41,5 +41,3 @@ article.md
 
 # Local planning docs
 docs/backlog.md
-cli/__pycache__/*
-cli/__pycache__/pn3.cpython-313.pyc

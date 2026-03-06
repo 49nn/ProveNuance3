@@ -1,7 +1,5 @@
 """
-Clingo runner: składa program LP i zwraca model stabilny.
-
-Generuje tekst LP z Pydantic Rule obiektów (nie potrzebuje clingo_text z DB).
+Clingo runner: builds an LP program and returns a stable model.
 """
 from __future__ import annotations
 
@@ -18,22 +16,16 @@ from sv._utils import to_clingo_id
 log = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Generowanie tekstu LP z Rule (Pydantic)
-# ---------------------------------------------------------------------------
-
 def _term_to_clingo(term: Term) -> str:
-    """VarTerm → 'X'  |  ConstTerm → 'const' (lowercase)."""
     if isinstance(term, VarTerm):
         return term.var
-    # ConstTerm
     return to_clingo_id(term.const)
 
 
 def _head_to_lp(head: RuleHead) -> str:
     if not head.args:
         return head.predicate
-    args_str = ",".join(_term_to_clingo(a.term) for a in head.args)
+    args_str = ",".join(_term_to_clingo(arg.term) for arg in head.args)
     return f"{head.predicate}({args_str})"
 
 
@@ -41,58 +33,48 @@ def _literal_to_lp(lit: RuleBodyLiteral) -> str:
     if not lit.args:
         atom = lit.predicate
     else:
-        args_str = ",".join(_term_to_clingo(a.term) for a in lit.args)
+        args_str = ",".join(_term_to_clingo(arg.term) for arg in lit.args)
         atom = f"{lit.predicate}({args_str})"
     return f"not {atom}" if lit.literal_type == LiteralType.naf else atom
 
 
 def _safe_vars(rule: Rule) -> set[str]:
-    """Zmienne pojawiające się w co najmniej jednym pozytywnym literale ciała."""
     safe: set[str] = set()
     for lit in rule.body:
-        if lit.literal_type == LiteralType.pos:
-            for arg in lit.args:
-                if isinstance(arg.term, VarTerm) and arg.term.var != "_":
-                    safe.add(arg.term.var)
+        if lit.literal_type != LiteralType.pos:
+            continue
+        for arg in lit.args:
+            if isinstance(arg.term, VarTerm) and arg.term.var != "_":
+                safe.add(arg.term.var)
     return safe
 
 
 def _all_named_vars(rule: Rule) -> set[str]:
-    """Wszystkie nazwane zmienne (nie-wildcard) w głowie i ciele."""
-    vs: set[str] = set()
+    vars_: set[str] = set()
     for arg in rule.head.args:
         if isinstance(arg.term, VarTerm) and arg.term.var != "_":
-            vs.add(arg.term.var)
+            vars_.add(arg.term.var)
     for lit in rule.body:
         for arg in lit.args:
             if isinstance(arg.term, VarTerm) and arg.term.var != "_":
-                vs.add(arg.term.var)
-    return vs
+                vars_.add(arg.term.var)
+    return vars_
 
 
-# Nazwa predykatu domeny (wewnętrzna, nie wpływa na logikę)
 _DOMAIN = "_sv_domain_"
 
 
-# ---------------------------------------------------------------------------
-# Parsowanie liczb z tokenów LP (wyciągnięte z _extract_computed_facts)
-# ---------------------------------------------------------------------------
-
 def _parse_number_token(token: str) -> float | None:
     """
-    Parsuje liczbę zakodowaną jako token LP.
-    Heurystyka: ostatni podkreślnik traktowany jako separator dziesiętny.
-    Przykład: 'e_199_99' → 199.99
+    Parse a number encoded as an LP token.
+    Example: 'e_199_99' -> 199.99
     """
     token = token.strip()
     if token.startswith("e_"):
         token = token[2:]
     if "_" in token and token.replace("_", "").isdigit():
         left, right = token.rsplit("_", 1)
-        if right.isdigit():
-            candidate = f"{left}.{right}"
-        else:
-            candidate = token
+        candidate = f"{left}.{right}" if right.isdigit() else token
     else:
         candidate = token
     candidate = candidate.replace("_", "")
@@ -104,17 +86,7 @@ def _parse_number_token(token: str) -> float | None:
 
 def rule_to_lp(rule: Rule) -> str:
     """
-    Konwertuje Rule Pydantic → Clingo LP string.
-
-    Zmienne "unsafe" (pojawiające się tylko w NAF lub głowie, bez pozytywnego
-    literału) są zabezpieczane przez literał domenowy `_sv_domain_(V)`.
-    Wartości domeny generowane są przez build_program() z faktów bazowych.
-
-    Przykład:
-      contract_formed(O) :- order_accepted(store,O,_).
-      prepaid(card).
-      ab_refund_hold(O) :- _sv_domain_(O), not returned_or_proof(O).
-      can_withdraw(C,O) :- customer_type(C,consumer), ..., not ab_withdraw(C,O).
+    Convert a Pydantic Rule object into Clingo LP syntax.
     """
     head_str = _head_to_lp(rule.head)
     if not rule.body:
@@ -122,22 +94,11 @@ def rule_to_lp(rule: Rule) -> str:
 
     unsafe = _all_named_vars(rule) - _safe_vars(rule)
     body_parts = [_literal_to_lp(lit) for lit in rule.body]
-    # Wstaw literały domenowe na początku ciała
-    domain_lits = [f"{_DOMAIN}({v})" for v in sorted(unsafe)]
-    all_body = domain_lits + body_parts
-    return f"{head_str} :- {', '.join(all_body)}."
+    domain_lits = [f"{_DOMAIN}({var})" for var in sorted(unsafe)]
+    return f"{head_str} :- {', '.join(domain_lits + body_parts)}."
 
-
-# ---------------------------------------------------------------------------
-# Budowanie programu LP i wywołanie Clingo
-# ---------------------------------------------------------------------------
 
 def _domain_facts(base_lp_facts: list[str]) -> list[str]:
-    """
-    Ekstrahuje wszystkie wartości atomów z faktów bazowych LP i generuje fakty domenowe.
-    Np. 'order_placed(c1,o1,d1).' → '_sv_domain_(c1). _sv_domain_(o1). _sv_domain_(d1).'
-    Dzięki temu reguły z unsafe variables mogą używać _sv_domain_(V) jako literału domeny.
-    """
     entities: set[str] = set()
     for fact in base_lp_facts:
         if "(" not in fact:
@@ -146,16 +107,12 @@ def _domain_facts(base_lp_facts: list[str]) -> list[str]:
         args_part = args_part.rstrip(". \t)\n")
         for arg in args_part.split(","):
             arg = arg.strip()
-            # Pomijamy zmienne (uppercase) i wildcards
             if arg and arg[0].islower() and arg[0] != "_":
                 entities.add(arg)
-    return [f"{_DOMAIN}({e})." for e in sorted(entities)]
+    return [f"{_DOMAIN}({entity})." for entity in sorted(entities)]
 
 
 def _parse_lp_fact(lp_fact: str) -> tuple[str, list[str]] | None:
-    """
-    Parse 'pred(a,b,c).' -> ('pred', ['a','b','c']).
-    """
     text = lp_fact.strip().rstrip(".")
     if not text:
         return None
@@ -163,7 +120,7 @@ def _parse_lp_fact(lp_fact: str) -> tuple[str, list[str]] | None:
         return text, []
     pred, tail = text.split("(", 1)
     args_raw = tail.rstrip(")")
-    args = [a.strip() for a in args_raw.split(",")] if args_raw else []
+    args = [arg.strip() for arg in args_raw.split(",")] if args_raw else []
     return pred.strip(), args
 
 
@@ -173,34 +130,24 @@ _DATE_TOKEN_RE = re.compile(
 
 
 def _parse_date_token(token: str) -> date | None:
-    """
-    Obsługuje np. e_2026_02_10, d_2026_02_10, 2026_02_10.
-    """
-    m = _DATE_TOKEN_RE.match(token)
-    if not m:
+    match = _DATE_TOKEN_RE.match(token)
+    if not match:
         return None
     try:
-        return date(int(m.group("y")), int(m.group("m")), int(m.group("d")))
+        return date(int(match.group("y")), int(match.group("m")), int(match.group("d")))
     except ValueError:
         return None
 
 
-def _suffix_digits(token: str) -> str:
-    m = re.search(r"(\d+)$", token)
-    return m.group(1) if m else ""
-
-
 def _extract_computed_facts(base_lp_facts: list[str]) -> list[str]:
     """
-    Buduje fakty pomocnicze wymagane przez reguły (external facts layer):
+    Build helper facts required by rules:
       - within_14_days(DS, DD)
       - paid_within_48h(O, D0)
       - coupon_not_expired(Cpn, today)
-      - meets_min_basket(Cpn, O)  (gdy istnieją order_amount + coupon_min_basket)
-      - order_contains(O, P)      (heurystyka nazewnicza)
-      - account_of_customer(C, A) (heurystyka nazewnicza)
+      - meets_min_basket(Cpn, O)
     """
-    parsed = [p for p in (_parse_lp_fact(f) for f in base_lp_facts) if p is not None]
+    parsed = [item for item in (_parse_lp_fact(fact) for fact in base_lp_facts) if item is not None]
 
     by_pred: dict[str, list[list[str]]] = {}
     for pred, args in parsed:
@@ -208,7 +155,6 @@ def _extract_computed_facts(base_lp_facts: list[str]) -> list[str]:
 
     derived: set[str] = set()
 
-    # within_14_days(DS, DD)
     date_tokens: dict[str, date] = {}
     for _, args in parsed:
         for arg in args:
@@ -216,126 +162,57 @@ def _extract_computed_facts(base_lp_facts: list[str]) -> list[str]:
             if parsed_date is not None:
                 date_tokens[arg] = parsed_date
 
-    sorted_dates = sorted(date_tokens.items(), key=lambda x: x[1])
-    for i, (ds_token, ds_date) in enumerate(sorted_dates):
-        for dd_token, dd_date in (t for t in sorted_dates[i:]):
-            delta = (dd_date - ds_date).days
+    sorted_dates = sorted(date_tokens.items(), key=lambda item: item[1])
+    for index, (from_token, from_date) in enumerate(sorted_dates):
+        for to_token, to_date in (item for item in sorted_dates[index:]):
+            delta = (to_date - from_date).days
             if delta > 14:
                 break
-            derived.add(f"within_14_days({ds_token},{dd_token}).")
+            derived.add(f"within_14_days({from_token},{to_token}).")
             if delta > 0:
-                derived.add(f"within_14_days({dd_token},{ds_token}).")
+                derived.add(f"within_14_days({to_token},{from_token}).")
 
-    # paid_within_48h(O, D0) from order_placed(_,O,D0) + payment_made(O,_,DPAY,_)
-    order_placed = by_pred.get("order_placed", [])
-    payment_made = by_pred.get("payment_made", [])
-    for op in order_placed:
-        if len(op) < 3:
+    for order_args in by_pred.get("order_placed", []):
+        if len(order_args) < 3:
             continue
-        order_token = op[1]
-        d0_token = op[2]
-        d0 = _parse_date_token(d0_token)
-        if d0 is None:
+        order_token = order_args[1]
+        order_date_token = order_args[2]
+        order_date = _parse_date_token(order_date_token)
+        if order_date is None:
             continue
-        for pm in payment_made:
-            if len(pm) < 3:
+
+        for payment_args in by_pred.get("payment_made", []):
+            if len(payment_args) < 3 or payment_args[0] != order_token:
                 continue
-            if pm[0] != order_token:
+            payment_date = _parse_date_token(payment_args[2])
+            if payment_date is None:
                 continue
-            dpay = _parse_date_token(pm[2])
-            if dpay is None:
-                continue
-            delta = (dpay - d0).days
+            delta = (payment_date - order_date).days
             if 0 <= delta <= 2:
-                derived.add(f"paid_within_48h({order_token},{d0_token}).")
+                derived.add(f"paid_within_48h({order_token},{order_date_token}).")
                 break
 
-    # coupon_not_expired(Cpn, today) for coupons seen in coupon_applied facts
     for args in by_pred.get("coupon_applied", []):
         if len(args) >= 3:
-            cpn = args[2]
-            derived.add(f"coupon_not_expired({cpn},today).")
+            derived.add(f"coupon_not_expired({args[2]},today).")
 
-    # meets_min_basket(Cpn, O) when both base facts exist
-    # order_amount(O, Amount), coupon_min_basket(Cpn, MinAmount)
     order_amount: dict[str, float] = {}
     coupon_min: dict[str, float] = {}
-
     for args in by_pred.get("order_amount", []):
         if len(args) >= 2:
-            val = _parse_number_token(args[1])
-            if val is not None:
-                order_amount[args[0]] = val
+            value = _parse_number_token(args[1])
+            if value is not None:
+                order_amount[args[0]] = value
     for args in by_pred.get("coupon_min_basket", []):
         if len(args) >= 2:
-            val = _parse_number_token(args[1])
-            if val is not None:
-                coupon_min[args[0]] = val
+            value = _parse_number_token(args[1])
+            if value is not None:
+                coupon_min[args[0]] = value
 
-    for cpn, min_amount in coupon_min.items():
+    for coupon, min_amount in coupon_min.items():
         for order_token, amount in order_amount.items():
             if amount >= min_amount:
-                derived.add(f"meets_min_basket({cpn},{order_token}).")
-
-    # order_contains(O, P): heurystyka po nazwach identyfikatorów.
-    orders: set[str] = set()
-    for pred, args in parsed:
-        if pred in {
-            "order_placed",
-            "order_accepted",
-            "delivered",
-            "withdrawal_statement_submitted",
-            "returned",
-            "coupon_applied",
-            "payment_selected",
-            "payment_made",
-            "chargeback_opened",
-        }:
-            if len(args) >= 2:
-                # W większości tych predykatów ORDER jest na pozycji 1, ale
-                # payment_selected/payment_made mają ORDER na pozycji 0.
-                if pred in {"payment_selected", "payment_made"}:
-                    orders.add(args[0])
-                else:
-                    orders.add(args[1])
-
-    products: set[str] = set()
-    for pred, args in parsed:
-        if pred == "product_type" and args:
-            products.add(args[0])
-    for token in date_tokens:
-        # Ignoruj daty.
-        products.discard(token)
-
-    for product in products:
-        if product.startswith("prod_"):
-            rest = product[5:]
-            if rest in orders:
-                derived.add(f"order_contains({rest},{product}).")
-        digits = _suffix_digits(product)
-        if digits:
-            candidate = f"o{digits}"
-            if candidate in orders:
-                derived.add(f"order_contains({candidate},{product}).")
-
-    # account_of_customer(C, A): heurystyka po końcówce numerycznej.
-    customers: set[str] = set()
-    accounts: set[str] = set()
-    for pred, args in parsed:
-        if pred == "order_placed" and args:
-            customers.add(args[0])
-        if pred == "account_status" and args:
-            accounts.add(args[0])
-        if pred == "account_blocked" and len(args) >= 2:
-            accounts.add(args[1])
-
-    for customer in customers:
-        c_digits = _suffix_digits(customer)
-        if not c_digits:
-            continue
-        for account in accounts:
-            if _suffix_digits(account) == c_digits:
-                derived.add(f"account_of_customer({customer},{account}).")
+                derived.add(f"meets_min_basket({coupon},{order_token}).")
 
     return sorted(derived)
 
@@ -345,11 +222,7 @@ def build_program(
     base_lp_facts: list[str],
 ) -> str:
     """
-    Składa kompletny program LP:
-      - fakty bazowe (z konwertera)
-      - fakty obliczane (external facts layer)
-      - fakty domenowe _sv_domain_ (dla unsafe variables w regułach)
-      - reguły (generowane z Rule obiektów)
+    Assemble a full LP program from base facts, helper facts, domain facts, and rules.
     """
     all_facts = sorted(set(base_lp_facts) | set(_extract_computed_facts(base_lp_facts)))
 
@@ -365,14 +238,7 @@ _CLINGO_TIMEOUT_SECONDS = 60.0
 
 def solve(program: str) -> frozenset[clingo.Symbol]:
     """
-    Uruchamia Clingo i zwraca model stabilny jako frozenset[Symbol].
-
-    Program Horn+NAF ze stratyfikowaną negacją → zawsze jeden stabilny model.
-    `--warn=none` tłumi ostrzeżenia o predykatach niezdefiniowanych w input
-    (np. computed predicates jak within_14_days dostarczane zewnętrznie).
-
-    Raises:
-        TimeoutError: gdy Clingo nie zakończy w _CLINGO_TIMEOUT_SECONDS sekund.
+    Run Clingo and return the stable model as frozenset[Symbol].
     """
     log.debug("Clingo solve: %d znakow programu", len(program))
     ctl = clingo.Control(["--warn=none"])
@@ -384,7 +250,7 @@ def solve(program: str) -> frozenset[clingo.Symbol]:
         if not handle.wait(_CLINGO_TIMEOUT_SECONDS):
             handle.cancel()
             raise TimeoutError(
-                f"Clingo solve przekroczył limit {_CLINGO_TIMEOUT_SECONDS}s"
+                f"Clingo solve przekroczyl limit {_CLINGO_TIMEOUT_SECONDS}s"
             )
         for model in handle:
             result = frozenset(model.symbols(shown=True))

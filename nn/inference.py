@@ -36,20 +36,6 @@ from .proposer import NeuralProposer
 from .trace import NeuralTracer
 
 TRUTH_ORDER = ("T", "F", "U")
-_CLUSTER_FACT_ROLES: dict[str, tuple[str, str]] = {
-    "customer_type": ("CUSTOMER", "TYPE"),
-    "order_status": ("ORDER", "VALUE"),
-    "payment_method": ("ORDER", "METHOD"),
-    "product_type": ("PRODUCT", "TYPE"),
-    "defective": ("ORDER", "VALUE"),
-    "store_pays_return": ("ORDER", "VALUE"),
-    "digital_consent": ("ORDER", "VALUE"),
-    "download_started_flag": ("ORDER", "VALUE"),
-    "coupon_stackable": ("COUPON", "VALUE"),
-    "account_status": ("ACCOUNT", "VALUE"),
-    "chargeback_status": ("ORDER", "VALUE"),
-    "password_shared": ("ACCOUNT", "VALUE"),
-}
 
 # Obserwowane fakty zachowują swój status — nie nadpisujemy
 _KEEP_STATUS = {FactStatus.observed, FactStatus.proved, FactStatus.rejected}
@@ -293,10 +279,8 @@ class NeuralInference:
                 continue
 
             value = schema.domain[top_idx].lower()
-            entity_role, value_role = _CLUSTER_FACT_ROLES.get(
-                state.cluster_name,
-                (schema.entity_type.upper(), "VALUE"),
-            )
+            entity_role = schema.resolved_entity_role
+            value_role = schema.resolved_value_role
 
             args = [
                 RoleArg(role=entity_role, entity_id=state.entity_id),
