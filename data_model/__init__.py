@@ -26,6 +26,13 @@ from .cluster import (
     ClusterSchema,
     ClusterStateRow,
 )
+from .self_training import (
+    CaseSplit,
+    PseudoClusterLabel,
+    PseudoFactLabel,
+    RoundStatus,
+    SelfTrainingRound,
+)
 from .fact import (
     FactStatus,
     NeuralTraceItem,
@@ -52,6 +59,9 @@ __all__ = [
     "MemorySlotEntry", "EntityLinking", "Entity",
     # cluster
     "ClusterSchema", "ClusterStateRow",
+    # self-training
+    "CaseSplit", "RoundStatus", "SelfTrainingRound",
+    "PseudoFactLabel", "PseudoClusterLabel",
     # fact
     "FactStatus", "NeuralTraceItem", "FactProvenance",
     "FactSource", "FactTime", "Fact",

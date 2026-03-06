@@ -26,7 +26,7 @@ from .graph_builder import ClusterSchema, GraphNodeIndex
 
 def l_mask(
     logits_cluster: dict[str, torch.Tensor],  # cluster_name -> [N, dim]
-    masked_items: list[tuple[str, int, int]],  # (cluster_name, node_idx, true_domain_idx)
+    masked_items: list[tuple[str, int, int, float]],  # (cluster_name, node_idx, true_domain_idx, weight)
     cluster_schemas: list[ClusterSchema],
 ) -> torch.Tensor:
     """
@@ -37,7 +37,9 @@ def l_mask(
     schema_by_name = {s.name: s for s in cluster_schemas}
     total = torch.tensor(0.0, requires_grad=True)
 
-    for cname, idx, k_true in masked_items:
+    total_weight = 0.0
+
+    for cname, idx, k_true, weight in masked_items:
         # logits_cluster może mieć klucze z prefiksem "c_" lub bez
         key = cname if cname in logits_cluster else f"c_{cname}"
         if key not in logits_cluster:
@@ -48,10 +50,11 @@ def l_mask(
         dim = schema.dim
         logit_row = logits_cluster[key][idx, :dim]  # [dim] — bez paddingu
         log_p = F.log_softmax(logit_row, dim=-1)
-        total = total - log_p[k_true]
+        total = total - (float(weight) * log_p[k_true])
+        total_weight += float(weight)
 
-    if masked_items:
-        total = total / len(masked_items)
+    if total_weight > 0.0:
+        total = total / total_weight
 
     return total
 
@@ -209,7 +212,7 @@ def compute_loss(
     node_index: GraphNodeIndex,
     config: NNConfig,
     cluster_schemas: list[ClusterSchema],
-    masked_items: list[tuple[str, int, int]],  # (cluster_name, node_idx, true_domain_idx)
+    masked_items: list[tuple[str, int, int, float]],  # (cluster_name, node_idx, true_domain_idx, weight)
     frozen_cluster: dict[str, torch.BoolTensor],
     frozen_fact: torch.BoolTensor,
 ) -> tuple[torch.Tensor, dict[str, float]]:

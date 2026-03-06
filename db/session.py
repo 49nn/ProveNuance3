@@ -49,8 +49,16 @@ class DBSession:
     def load_predicate_positions(self) -> dict[str, list[str]]:
         return load_predicate_positions(self.conn)
 
-    def load_rules(self, enabled_only: bool = True) -> list["Rule"]:
-        return load_rules(self.conn, enabled_only=enabled_only)
+    def load_rules(
+        self,
+        enabled_only: bool = True,
+        include_learned_modules: list[str] | None = None,
+    ) -> list["Rule"]:
+        return load_rules(
+            self.conn,
+            enabled_only=enabled_only,
+            include_learned_modules=include_learned_modules,
+        )
 
     def save_ontology(self, result: "OntologyResult") -> None:
         with self.conn.transaction():

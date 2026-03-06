@@ -116,7 +116,7 @@ class ProposerTrainer:
     def _sample_and_mask(
         self,
         data: HeteroData,
-    ) -> tuple[list[tuple[str, int, int]], dict[str, tuple[torch.Tensor, torch.Tensor]]]:
+    ) -> tuple[list[tuple[str, int, int, float]], dict[str, tuple[torch.Tensor, torch.Tensor]]]:
         """
         Wybiera losowo frakcję clamped węzłów klastrów do maskowania.
 
@@ -124,7 +124,7 @@ class ProposerTrainer:
             masked_items: [(cluster_name, node_idx, true_domain_idx), ...]
             saved_clamp_state: cluster_type -> (is_clamped_copy, clamp_hard_copy)
         """
-        masked_items: list[tuple[str, int, int]] = []
+        masked_items: list[tuple[str, int, int, float]] = []
         saved: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
 
         for node_type in data.node_types:
@@ -135,6 +135,10 @@ class ProposerTrainer:
             clamp_hard = data[node_type].get("clamp_hard")
             if is_clamped is None:
                 continue
+            mask_weight = data[node_type].get(
+                "mask_weight",
+                torch.ones(data[node_type].x.size(0), dtype=torch.float32),
+            )
 
             # Zapisz oryginał
             saved[node_type] = (is_clamped.clone(), clamp_hard.clone())
@@ -152,7 +156,8 @@ class ProposerTrainer:
             for idx in to_mask:
                 # Prawdziwa wartość = argmax bieżących logitów (przed maskowaniem)
                 k_true = int(data[node_type].x[idx].argmax().item())
-                masked_items.append((cname, idx, k_true))
+                weight = float(mask_weight[idx].item()) if mask_weight.numel() > idx else 1.0
+                masked_items.append((cname, idx, k_true, weight))
 
                 # Odklampuj: wyzeruj flagi
                 data[node_type].is_clamped[idx] = False

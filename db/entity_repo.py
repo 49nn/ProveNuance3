@@ -276,6 +276,19 @@ def load_entities_for_case(
     return entities
 
 
+def load_entities_by_ids(
+    conn: psycopg.Connection,
+    entity_ids: list[str],
+) -> list[Entity]:
+    unique_ids = list(dict.fromkeys(eid for eid in entity_ids if eid))
+    entities: list[Entity] = []
+    for eid in unique_ids:
+        entity = _load_entity_record(conn, eid)
+        if entity is not None:
+            entities.append(entity)
+    return entities
+
+
 def _entity_match_score(
     candidate: Entity,
     existing_canonical: str,

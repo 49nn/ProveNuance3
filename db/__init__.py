@@ -33,11 +33,20 @@ def load_predicate_positions(conn: psycopg.Connection | None = None):
 def load_rules(
     conn: psycopg.Connection | None = None,
     enabled_only: bool = True,
+    include_learned_modules: list[str] | None = None,
 ):
     if conn is not None:
-        return _load_rules(conn, enabled_only=enabled_only)
+        return _load_rules(
+            conn,
+            enabled_only=enabled_only,
+            include_learned_modules=include_learned_modules,
+        )
     with _connect() as local_conn:
-        return _load_rules(local_conn, enabled_only=enabled_only)
+        return _load_rules(
+            local_conn,
+            enabled_only=enabled_only,
+            include_learned_modules=include_learned_modules,
+        )
 
 
 __all__ = [

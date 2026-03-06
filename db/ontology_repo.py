@@ -27,6 +27,9 @@ def save_ontology(conn: psycopg.Connection, result: OntologyResult) -> None:
 
 def _clear_existing_ontology(conn: psycopg.Connection) -> None:
     with conn.cursor() as cur:
+        cur.execute("DELETE FROM pseudo_fact_labels")
+        cur.execute("DELETE FROM pseudo_cluster_labels")
+        cur.execute("DELETE FROM self_training_rounds")
         cur.execute("DELETE FROM facts")
         cur.execute("DELETE FROM cluster_states")
         cur.execute("DELETE FROM entities")

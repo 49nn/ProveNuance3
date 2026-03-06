@@ -47,8 +47,19 @@ def _parse_body_literal(b: dict) -> RuleBodyLiteral:
     )
 
 
-def load_rules(conn: psycopg.Connection, enabled_only: bool = True) -> list[Rule]:
-    where = "WHERE r.enabled = TRUE" if enabled_only else ""
+def load_rules(
+    conn: psycopg.Connection,
+    enabled_only: bool = True,
+    include_learned_modules: list[str] | None = None,
+) -> list[Rule]:
+    filters: list[str] = []
+    params: list[object] = []
+    if enabled_only:
+        filters.append("r.enabled = TRUE")
+    if include_learned_modules is not None:
+        filters.append("(r.learned = FALSE OR rm.name = ANY(%s))")
+        params.append(include_learned_modules)
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
     with conn.cursor() as cur:
         cur.execute(f"""
             SELECT
@@ -64,9 +75,10 @@ def load_rules(conn: psycopg.Connection, enabled_only: bool = True) -> list[Rule
                 r.last_validated_at,
                 r.constraints
             FROM rules r
+            JOIN rule_modules rm ON rm.id = r.module_id
             {where}
             ORDER BY r.stratum, r.id
-        """)
+        """, params)
         rows = cur.fetchall()
 
     result: list[Rule] = []
