@@ -8,9 +8,12 @@ Workflow (single run):
 """
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 import torch
+
+log = logging.getLogger(__name__)
 
 from data_model.common import ConstTerm
 from data_model.rule import LiteralType
@@ -247,12 +250,22 @@ class ProposeVerifyRunner:
         self._apply_learned_rule_weights(rules)
 
         # Phase 1: neural propose
+        log.debug(
+            "Faza NN propose: %d encji, %d faktow, %d regul, %d stanow",
+            len(entities), len(facts), len(rules), len(cluster_states),
+        )
         nn_facts, nn_states = self.nn_inference.propose(
             entities, facts, rules, cluster_states
         )
+        log.debug("Faza NN propose: zwrocono %d faktow kandydatow", len(nn_facts))
 
         # Phase 2: symbolic verify
+        log.debug("Faza SV verify: start")
         sv_result = self.verifier.verify(nn_facts, rules, nn_states)
+        log.debug(
+            "Faza SV verify: %d faktow proved, %d nowych faktow",
+            len(sv_result.updated_facts), len(sv_result.new_facts),
+        )
 
         # Merge: updated facts + newly derived facts
         all_facts = sv_result.updated_facts + sv_result.new_facts

@@ -9,33 +9,18 @@ Odpowiada za:
 """
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
 
 import clingo
 
 from data_model.fact import Fact
 from nn.graph_builder import ClusterSchema, ClusterStateRow
+from sv._utils import to_clingo_id
 from sv.schema import DEFAULT_CLUSTER_ROLES, PREDICATE_POSITIONS
 from sv.types import GroundAtom
 
 if TYPE_CHECKING:
     pass
-
-
-# ---------------------------------------------------------------------------
-# Normalizacja identyfikatorów
-# ---------------------------------------------------------------------------
-
-def to_clingo_id(s: str) -> str:
-    """
-    Normalizuje string (entity_id, wartość) do poprawnego atomu Clingo (lowercase).
-    UUID "3f9a-..." → "e_3f9a_..." (prefiks gdy zaczyna się od cyfry).
-    """
-    safe = re.sub(r"[^a-z0-9_]", "_", s.lower())
-    if not safe or safe[0].isdigit():
-        safe = "e_" + safe
-    return safe
 
 
 class IdRegistry:

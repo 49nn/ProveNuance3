@@ -5,12 +5,17 @@ Generuje tekst LP z Pydantic Rule obiektów (nie potrzebuje clingo_text z DB).
 """
 from __future__ import annotations
 
-import clingo
-from datetime import date
+import logging
 import re
+from datetime import date
+
+import clingo
 
 from data_model.common import ConstTerm, Term, VarTerm
 from data_model.rule import LiteralType, Rule, RuleBodyLiteral, RuleHead
+from sv._utils import to_clingo_id
+
+log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +74,34 @@ def _all_named_vars(rule: Rule) -> set[str]:
 _DOMAIN = "_sv_domain_"
 
 
+# ---------------------------------------------------------------------------
+# Parsowanie liczb z tokenów LP (wyciągnięte z _extract_computed_facts)
+# ---------------------------------------------------------------------------
+
+def _parse_number_token(token: str) -> float | None:
+    """
+    Parsuje liczbę zakodowaną jako token LP.
+    Heurystyka: ostatni podkreślnik traktowany jako separator dziesiętny.
+    Przykład: 'e_199_99' → 199.99
+    """
+    token = token.strip()
+    if token.startswith("e_"):
+        token = token[2:]
+    if "_" in token and token.replace("_", "").isdigit():
+        left, right = token.rsplit("_", 1)
+        if right.isdigit():
+            candidate = f"{left}.{right}"
+        else:
+            candidate = token
+    else:
+        candidate = token
+    candidate = candidate.replace("_", "")
+    try:
+        return float(candidate)
+    except ValueError:
+        return None
+
+
 def rule_to_lp(rule: Rule) -> str:
     """
     Konwertuje Rule Pydantic → Clingo LP string.
@@ -96,19 +129,6 @@ def rule_to_lp(rule: Rule) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Pomocnicza normalizacja (duplikat z converter.py — unikamy cyklicznych importów)
-# ---------------------------------------------------------------------------
-
-import re as _re
-
-def to_clingo_id(s: str) -> str:
-    safe = _re.sub(r"[^a-z0-9_]", "_", s.lower())
-    if not safe or safe[0].isdigit():
-        safe = "e_" + safe
-    return safe
-
-
-# ---------------------------------------------------------------------------
 # Budowanie programu LP i wywołanie Clingo
 # ---------------------------------------------------------------------------
 
@@ -118,7 +138,6 @@ def _domain_facts(base_lp_facts: list[str]) -> list[str]:
     Np. 'order_placed(c1,o1,d1).' → '_sv_domain_(c1). _sv_domain_(o1). _sv_domain_(d1).'
     Dzięki temu reguły z unsafe variables mogą używać _sv_domain_(V) jako literału domeny.
     """
-    import re as _re_local
     entities: set[str] = set()
     for fact in base_lp_facts:
         if "(" not in fact:
@@ -197,11 +216,15 @@ def _extract_computed_facts(base_lp_facts: list[str]) -> list[str]:
             if parsed_date is not None:
                 date_tokens[arg] = parsed_date
 
-    for ds_token, ds_date in date_tokens.items():
-        for dd_token, dd_date in date_tokens.items():
-            delta = (ds_date - dd_date).days
-            if 0 <= delta <= 14:
-                derived.add(f"within_14_days({ds_token},{dd_token}).")
+    sorted_dates = sorted(date_tokens.items(), key=lambda x: x[1])
+    for i, (ds_token, ds_date) in enumerate(sorted_dates):
+        for dd_token, dd_date in (t for t in sorted_dates[i:]):
+            delta = (dd_date - ds_date).days
+            if delta > 14:
+                break
+            derived.add(f"within_14_days({ds_token},{dd_token}).")
+            if delta > 0:
+                derived.add(f"within_14_days({dd_token},{ds_token}).")
 
     # paid_within_48h(O, D0) from order_placed(_,O,D0) + payment_made(O,_,DPAY,_)
     order_placed = by_pred.get("order_placed", [])
@@ -237,25 +260,6 @@ def _extract_computed_facts(base_lp_facts: list[str]) -> list[str]:
     # order_amount(O, Amount), coupon_min_basket(Cpn, MinAmount)
     order_amount: dict[str, float] = {}
     coupon_min: dict[str, float] = {}
-
-    def _parse_number_token(token: str) -> float | None:
-        token = token.strip()
-        if token.startswith("e_"):
-            token = token[2:]
-        # Heurystyka: ostatni underscore traktujemy jako separator dziesiętny.
-        if "_" in token and token.replace("_", "").isdigit():
-            left, right = token.rsplit("_", 1)
-            if right.isdigit():
-                candidate = f"{left}.{right}"
-            else:
-                candidate = token
-        else:
-            candidate = token
-        candidate = candidate.replace("_", "")
-        try:
-            return float(candidate)
-        except ValueError:
-            return None
 
     for args in by_pred.get("order_amount", []):
         if len(args) >= 2:
@@ -347,15 +351,16 @@ def build_program(
       - fakty domenowe _sv_domain_ (dla unsafe variables w regułach)
       - reguły (generowane z Rule obiektów)
     """
-    base_unique = sorted(set(base_lp_facts))
-    computed = _extract_computed_facts(base_unique)
-    all_facts = sorted(set(base_unique + computed))
+    all_facts = sorted(set(base_lp_facts) | set(_extract_computed_facts(base_lp_facts)))
 
     lines: list[str] = list(all_facts)
     lines += _domain_facts(all_facts)
     for rule in rules:
         lines.append(rule_to_lp(rule))
     return "\n".join(lines)
+
+
+_CLINGO_TIMEOUT_SECONDS = 60.0
 
 
 def solve(program: str) -> frozenset[clingo.Symbol]:
@@ -365,14 +370,24 @@ def solve(program: str) -> frozenset[clingo.Symbol]:
     Program Horn+NAF ze stratyfikowaną negacją → zawsze jeden stabilny model.
     `--warn=none` tłumi ostrzeżenia o predykatach niezdefiniowanych w input
     (np. computed predicates jak within_14_days dostarczane zewnętrznie).
+
+    Raises:
+        TimeoutError: gdy Clingo nie zakończy w _CLINGO_TIMEOUT_SECONDS sekund.
     """
+    log.debug("Clingo solve: %d znakow programu", len(program))
     ctl = clingo.Control(["--warn=none"])
     ctl.add("base", [], program)
     ctl.ground([("base", [])])
 
-    result: list[clingo.Symbol] = []
+    result: frozenset[clingo.Symbol] = frozenset()
     with ctl.solve(yield_=True) as handle:  # type: ignore[union-attr]
+        if not handle.wait(_CLINGO_TIMEOUT_SECONDS):
+            handle.cancel()
+            raise TimeoutError(
+                f"Clingo solve przekroczył limit {_CLINGO_TIMEOUT_SECONDS}s"
+            )
         for model in handle:
-            result = list(model.symbols(shown=True))
+            result = frozenset(model.symbols(shown=True))
 
-    return frozenset(result)
+    log.debug("Clingo solve: %d atomow w modelu", len(result))
+    return result

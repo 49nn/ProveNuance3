@@ -36,7 +36,7 @@ PL_MONTHS: dict[str, int] = {
 DATE_RE = re.compile(
     r"\b(\d{1,2})\s+("
     + "|".join(sorted(PL_MONTHS, key=len, reverse=True))
-    + r")\b",
+    + r")(?:\s+(\d{4}))?\b",
     re.IGNORECASE,
 )
 

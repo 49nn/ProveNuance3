@@ -17,6 +17,11 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
+try:
+    import dateparser as _dateparser
+except ImportError:
+    _dateparser = None  # type: ignore[assignment]
+
 from data_model.common import ProvenanceItem, RoleArg, Span, TruthDistribution
 from data_model.entity import Entity
 from data_model.fact import Fact, FactProvenance, FactSource, FactStatus
@@ -161,13 +166,24 @@ class TextExtractor:
 
     def _find_date_positions(self, text: str) -> list[tuple[str, int, int]]:
         dates: list[tuple[str, int, int]] = []
+        if _dateparser is not None:
+            dp_settings = {
+                "PREFER_DAY_OF_MONTH": "first",
+                "RETURN_AS_TIMEZONE_AWARE": False,
+                "PREFER_DATES_FROM": "past",
+                # RELATIVE_BASE = koniec roku domyślnego → "10 marca" bez roku
+                # interpretowane jako bieżący rok (w przeszłości względem 31.12)
+                "RELATIVE_BASE": datetime(self.year, 12, 31),
+            }
         for m in DATE_RE.finditer(text):
-            day = int(m.group(1))
-            month_key = m.group(2).lower()
-            month = PL_MONTHS.get(month_key, 0)
-            if month == 0:
+            if _dateparser is not None:
+                parsed = _dateparser.parse(m.group(), languages=["pl"], settings=dp_settings)
+            else:
+                month = PL_MONTHS.get(m.group(2).lower(), 0)
+                parsed = datetime(self.year, month, int(m.group(1))) if month else None
+            if parsed is None:
                 continue
-            date_id = f"D_{self.year}-{month:02d}-{day:02d}"
+            date_id = f"D_{parsed.year}-{parsed.month:02d}-{parsed.day:02d}"
             dates.append((date_id, m.start(), m.end()))
         return dates
 

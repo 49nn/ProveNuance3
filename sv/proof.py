@@ -18,16 +18,8 @@ from typing import Iterator
 
 from data_model.common import ConstTerm, VarTerm
 from data_model.rule import LiteralType, Rule, RuleBodyLiteral, RuleHead
+from sv._utils import to_clingo_id as _to_cid
 from sv.types import GroundAtom, GroundRule, ProofNode
-
-
-# ---------------------------------------------------------------------------
-# Normalizacja (lokalna kopia — unikamy cyklicznego importu runner ↔ proof)
-# ---------------------------------------------------------------------------
-
-def _to_cid(s: str) -> str:
-    safe = re.sub(r"[^a-z0-9_]", "_", s.lower())
-    return ("e_" + safe) if (not safe or safe[0].isdigit()) else safe
 
 
 _ARG_ROLE_RE = re.compile(r"^ARG(\d+)$", re.IGNORECASE)
