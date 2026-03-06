@@ -186,8 +186,13 @@ def _fact_from_cluster_alias(
     if not target_roles:
         return None
 
+    # Each cluster contributes its entity_id under the role matching its primary
+    # entity type. ORDER only applies to order-scoped clusters; non-order clusters
+    # (account, coupon, customer, product) must be excluded to avoid wrong bindings.
+    # When adding a new cluster, update this exclusion set.
+    _NON_ORDER_CLUSTERS = {"coupon_stackable", "account_status", "customer_type", "product_type"}
     context = {
-        "ORDER": cluster_state.entity_id if cluster_state.cluster_name != "coupon_stackable" else None,
+        "ORDER": cluster_state.entity_id if cluster_state.cluster_name not in _NON_ORDER_CLUSTERS else None,
         "ACCOUNT": cluster_state.entity_id if cluster_state.cluster_name == "account_status" else None,
         "COUPON": cluster_state.entity_id if cluster_state.cluster_name == "coupon_stackable" else None,
         "CUSTOMER": cluster_state.entity_id if cluster_state.cluster_name == "customer_type" else None,

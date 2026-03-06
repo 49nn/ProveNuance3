@@ -16,12 +16,12 @@ Przepływ:
 from __future__ import annotations
 
 import json
+import warnings
 from collections import defaultdict
 from typing import Any
 
 from nn.graph_builder import ClusterSchema
 from runtime_env import get_required_env
-from sv.schema import PREDICATE_POSITIONS
 
 from .llm_prompt import (
     build_correction_prompt,
@@ -60,7 +60,17 @@ class LLMExtractor:
 
         api_key = get_required_env(config.api_key_env)
         self._client = genai.Client(api_key=api_key)
-        self._predicate_positions = predicate_positions or dict(PREDICATE_POSITIONS)
+        if predicate_positions:
+            self._predicate_positions = predicate_positions
+        else:
+            warnings.warn(
+                "LLMExtractor: predicate_positions nie zostały przekazane — "
+                "używam statycznego sv.schema.PREDICATE_POSITIONS. "
+                "Przekaż predicate_positions z DBSession aby używać aktywnej ontologii.",
+                stacklevel=2,
+            )
+            from sv.schema import PREDICATE_POSITIONS
+            self._predicate_positions = dict(PREDICATE_POSITIONS)
         self._system_prompt = build_system_prompt(cluster_schemas, self._predicate_positions)
         self._response_schema = build_response_schema()
         self._schemas = cluster_schemas
@@ -74,7 +84,7 @@ class LLMExtractor:
                 from sv import SymbolicVerifier
                 self._sv = SymbolicVerifier(
                     cluster_schemas=cluster_schemas,
-                    predicate_positions=self._predicate_positions or None,
+                    predicate_positions=self._predicate_positions,
                 )
             except ImportError:
                 pass  # clingo niedostępne — pomijamy SV walidację

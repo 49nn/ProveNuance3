@@ -11,6 +11,13 @@ _ENV_LOADED = False
 _DOTENV_AVAILABLE = True
 
 
+def _reset_for_testing() -> None:
+    """Reset singleton state. Use only in test teardown."""
+    global _ENV_LOADED, _DOTENV_AVAILABLE
+    _ENV_LOADED = False
+    _DOTENV_AVAILABLE = True
+
+
 def load_project_env() -> Path:
     global _ENV_LOADED, _DOTENV_AVAILABLE
 
@@ -39,12 +46,12 @@ def get_required_env(var_name: str) -> str:
 
     if not _DOTENV_AVAILABLE:
         raise EnvironmentError(
-            f"Brak zmiennej srodowiskowej: {var_name}. "
-            "Pakiet python-dotenv nie jest zainstalowany, wiec .env nie zostal zaladowany. "
+            f"Brak zmiennej środowiskowej: {var_name}. "
+            "Pakiet python-dotenv nie jest zainstalowany, więc .env nie został załadowany. "
             f"Plik .env oczekiwany: {env_path}"
         )
 
     raise EnvironmentError(
-        f"Brak zmiennej srodowiskowej: {var_name}. "
-        f"Sprawdz plik .env: {env_path}"
+        f"Brak zmiennej środowiskowej: {var_name}. "
+        f"Sprawdź plik .env: {env_path}"
     )

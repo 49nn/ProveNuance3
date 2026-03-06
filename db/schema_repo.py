@@ -38,13 +38,12 @@ def load_predicate_positions(conn: psycopg.Connection) -> dict[str, list[str]]:
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT
+            SELECT DISTINCT
                 lower(pd.name) AS predicate_name,
                 pr.role_name,
                 pr.position
             FROM predicate_definitions pd
             JOIN predicate_roles pr ON pr.predicate_id = pd.id
-            GROUP BY pd.name, pr.role_name, pr.position
             ORDER BY lower(pd.name), pr.position
             """
         )
