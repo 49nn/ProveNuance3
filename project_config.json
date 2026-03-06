@@ -5,7 +5,8 @@
     "temperature": 0.0,
     "max_retries": 2,
     "sv_verification": true,
-    "api_key_env": "GEMINI_API_KEY"
+    "api_key_env": "GEMINI_API_KEY",
+    "preflight_timeout_s": 120
   },
   "explainer": {
     "grounded" : true

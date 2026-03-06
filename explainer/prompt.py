@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from data_model.fact import Fact, FactStatus, NeuralTraceItem
 
 if TYPE_CHECKING:
-    from nn.graph_builder import ClusterStateRow
+    from data_model.cluster import ClusterStateRow
     from sv.proof import ProofRun
 
 # ---------------------------------------------------------------------------

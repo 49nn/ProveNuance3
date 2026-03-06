@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import uuid
 
+from data_model.cluster import ClusterSchema, ClusterStateRow
 from data_model.common import RoleArg, TruthDistribution
 from data_model.fact import Fact, FactProvenance, FactStatus
 from data_model.rule import Rule
-from nn.graph_builder import ClusterSchema, ClusterStateRow
 from sv.converter import IdRegistry, cluster_to_lp, fact_to_lp, symbol_to_atom
 from sv.proof import ProofRun, build_proof_run, extract_proof_dag, ground_rule
 from sv.runner import build_program, solve

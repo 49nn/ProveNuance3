@@ -9,6 +9,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import threading
 from dataclasses import replace
 
 import psycopg2
@@ -20,6 +21,8 @@ from runtime_env import load_project_env
 # Force UTF-8 output so Rich unicode symbols work on Windows legacy consoles.
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 console = Console()
 load_project_env()
@@ -1550,6 +1553,277 @@ def _ensure_case_exists(conn, case_id: str, source_id: str, title: str) -> None:
         )
 
 
+def _mask_api_key(api_key: str) -> str:
+    return f"...{api_key[-4:]}" if api_key else "BRAK"
+
+
+def _assert_extraction_runtime_ready(
+    cluster_schemas: list,
+    predicate_positions: dict[str, list[str]],
+    cfg,
+) -> None:
+    if not cluster_schemas:
+        raise RuntimeError(
+            "Brak aktywnej ontologii. Najpierw uruchom gen-ontology."
+        )
+    if not predicate_positions:
+        raise RuntimeError(
+            "Aktywna ontologia nie zawiera predykatów. Uruchom gen-ontology ponownie."
+        )
+    api_key = os.environ.get(cfg.extractor.api_key_env, "").strip()
+    if not api_key:
+        raise RuntimeError(
+            f"Brak zmiennej środowiskowej {cfg.extractor.api_key_env}."
+        )
+
+
+def _extract_once(
+    cluster_schemas: list,
+    predicate_positions: dict[str, list[str]],
+    cfg,
+    text: str,
+    source_id: str,
+):
+    from config import ExtractorConfig, ProjectConfig
+    from nlp import get_extractor
+
+    # Ingest uruchamia verifier jako osobny subprocess zaraz po ekstrakcji,
+    # więc w subprocessie ekstraktora nie łączymy LLM i clingo w jednym procesie.
+    if isinstance(cfg, ProjectConfig):
+        runtime_cfg = replace(cfg, extractor=replace(cfg.extractor, sv_verification=False))
+    elif isinstance(cfg, ExtractorConfig):
+        runtime_cfg = replace(cfg, sv_verification=False)
+    else:
+        runtime_cfg = cfg
+
+    extractor = get_extractor(
+        cluster_schemas,
+        runtime_cfg,
+        predicate_positions=predicate_positions,
+    )
+    try:
+        return extractor.extract(text, source_id=source_id)
+    finally:
+        close = getattr(extractor, "close", None)
+        if callable(close):
+            close()
+
+
+def _serialize_extraction_result(result) -> str:
+    cluster_states: list[dict[str, object]] = []
+    for cs in result.cluster_states:
+        payload = {
+            "entity_id": cs.entity_id,
+            "cluster_name": cs.cluster_name,
+            "logits": cs.logits,
+            "is_clamped": cs.is_clamped,
+            "clamp_hard": cs.clamp_hard,
+            "clamp_source": cs.clamp_source,
+            "source_span": None,
+        }
+        if cs.source_span is not None:
+            payload["source_span"] = cs.source_span.model_dump(mode="json")
+        cluster_states.append(payload)
+
+    return json.dumps(
+        {
+            "source_id": result.source_id,
+            "entities": [entity.model_dump(mode="json") for entity in result.entities],
+            "facts": [fact.model_dump(mode="json") for fact in result.facts],
+            "cluster_states": cluster_states,
+        },
+        ensure_ascii=False,
+    )
+
+
+def _deserialize_extraction_result(payload: dict[str, object]):
+    from data_model.cluster import ClusterStateRow
+    from data_model.common import Span
+    from data_model.entity import Entity
+    from data_model.fact import Fact
+    from nlp.result import ExtractionResult
+
+    cluster_states: list[ClusterStateRow] = []
+    for item in payload.get("cluster_states", []):
+        row = dict(item)
+        if row.get("source_span") is not None:
+            row["source_span"] = Span.model_validate(row["source_span"])
+        cluster_states.append(ClusterStateRow(**row))
+
+    return ExtractionResult(
+        entities=[Entity.model_validate(item) for item in payload.get("entities", [])],
+        facts=[Fact.model_validate(item) for item in payload.get("facts", [])],
+        cluster_states=cluster_states,
+        source_id=str(payload.get("source_id", "text")),
+    )
+
+
+def _run_extract_subprocess(file_path: Path, source_id: str, timeout_s: int):
+    subprocess_timeout = timeout_s + 5
+    cmd = [
+        sys.executable,
+        "-m",
+        "cli.pn3",
+        "_extract-json",
+        "--file",
+        str(file_path),
+        "--source-id",
+        source_id,
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=subprocess_timeout,
+            cwd=str(Path(__file__).resolve().parent.parent),
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise TimeoutError(f"extract timeout po {timeout_s}s") from exc
+
+    stdout = (proc.stdout or "").strip()
+    stderr = (proc.stderr or "").strip()
+    if proc.returncode != 0:
+        detail = stderr or stdout or f"subprocess exit code {proc.returncode}"
+        raise RuntimeError(detail)
+    if not stdout:
+        raise RuntimeError("Subprocess ekstrakcji zwrócił pusty output.")
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        snippet = stdout[:300]
+        raise RuntimeError(f"Nieprawidłowy JSON z subprocessu ekstrakcji: {snippet}") from exc
+    return _deserialize_extraction_result(payload)
+
+
+def _run_verify_subprocess(result, timeout_s: int):
+    import tempfile
+
+    subprocess_timeout = timeout_s + 5
+    payload_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            suffix=".json",
+            delete=False,
+        ) as tmp:
+            tmp.write(_serialize_extraction_result(result))
+            payload_path = Path(tmp.name)
+
+        cmd = [
+            sys.executable,
+            "-m",
+            "cli.pn3",
+            "_verify-json",
+            "--input-json",
+            str(payload_path),
+        ]
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=subprocess_timeout,
+            cwd=str(Path(__file__).resolve().parent.parent),
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise TimeoutError(f"verify timeout po {timeout_s}s") from exc
+    finally:
+        if payload_path is not None and payload_path.exists():
+            payload_path.unlink()
+
+    stdout = (proc.stdout or "").strip()
+    stderr = (proc.stderr or "").strip()
+    if proc.returncode != 0:
+        detail = stderr or stdout or f"subprocess exit code {proc.returncode}"
+        raise RuntimeError(detail)
+    if not stdout:
+        raise RuntimeError("Subprocess weryfikacji zwrócił pusty output.")
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        snippet = stdout[:300]
+        raise RuntimeError(f"Nieprawidłowy JSON z subprocessu weryfikacji: {snippet}") from exc
+    return _deserialize_extraction_result(payload)
+
+
+def cmd_extract_json(args: argparse.Namespace) -> None:
+    from config import ProjectConfig
+    from db import DBSession
+
+    try:
+        file_path = Path(args.file)
+        if not file_path.is_file():
+            print(f"Plik nie istnieje: {file_path}", file=sys.stderr)
+            raise SystemExit(1)
+
+        text = file_path.read_text(encoding="utf-8").strip()
+        if not text:
+            print(f"Tekst jest pusty: {file_path}", file=sys.stderr)
+            raise SystemExit(1)
+
+        cfg = ProjectConfig.load()
+        with DBSession.connect() as session:
+            schemas = session.load_cluster_schemas()
+            predicate_positions = session.load_predicate_positions()
+            _assert_extraction_runtime_ready(schemas, predicate_positions, cfg)
+            result = _extract_once(
+                schemas,
+                predicate_positions,
+                cfg,
+                text,
+                args.source_id,
+            )
+
+        print(_serialize_extraction_result(result), flush=True)
+    except Exception as exc:
+        print(f"{type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        raise SystemExit(1) from None
+
+
+def cmd_verify_json(args: argparse.Namespace) -> None:
+    from db import DBSession
+    from nlp.result import ExtractionResult
+    from sv import SymbolicVerifier
+
+    try:
+        input_path = Path(args.input_json)
+        if not input_path.is_file():
+            print(f"Plik nie istnieje: {input_path}", file=sys.stderr)
+            raise SystemExit(1)
+
+        payload = json.loads(input_path.read_text(encoding="utf-8"))
+        result: ExtractionResult = _deserialize_extraction_result(payload)
+
+        with DBSession.connect() as session:
+            schemas = session.load_cluster_schemas()
+            predicate_positions = session.load_predicate_positions()
+
+        verifier = SymbolicVerifier(
+            cluster_schemas=schemas,
+            predicate_positions=predicate_positions,
+        )
+        verify_result = verifier.verify(
+            facts=result.facts,
+            rules=[],
+            cluster_states=result.cluster_states,
+        )
+        verified = ExtractionResult(
+            entities=result.entities,
+            facts=verify_result.updated_facts,
+            cluster_states=result.cluster_states,
+            source_id=result.source_id,
+        )
+        print(_serialize_extraction_result(verified), flush=True)
+    except Exception as exc:
+        print(f"{type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        raise SystemExit(1) from None
+
+
 def cmd_ingest_text(args: argparse.Namespace) -> None:
     """
     Ekstrahuje fakty z tekstu i zapisuje do DB dla podanego case_id.
@@ -1560,18 +1834,29 @@ def cmd_ingest_text(args: argparse.Namespace) -> None:
       pn3 ingest-text TC-002 --file ... --create      # utwórz case jeśli nie istnieje
       pn3 ingest-text TC-002 --file ... --dry-run     # pokaż wynik bez zapisu
     """
+    import tempfile
     from pathlib import Path
 
     from config import ProjectConfig
     from db import DBSession
-    from nlp import get_extractor
 
     case_id: str = args.case_id
 
+    cleanup_path: Path | None = None
     if args.file:
-        text = Path(args.file).read_text(encoding="utf-8").strip()
+        input_path = Path(args.file)
+        text = input_path.read_text(encoding="utf-8").strip()
     elif args.text:
         text = args.text.strip()
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            suffix=".txt",
+            delete=False,
+        ) as tmp:
+            tmp.write(text)
+            input_path = Path(tmp.name)
+            cleanup_path = input_path
     else:
         console.print("[bold red]Podaj --text lub --file.[/bold red]")
         raise SystemExit(1)
@@ -1587,22 +1872,50 @@ def cmd_ingest_text(args: argparse.Namespace) -> None:
     with DBSession.connect() as session:
         schemas = session.load_cluster_schemas()
         predicate_positions = session.load_predicate_positions()
+        try:
+            _assert_extraction_runtime_ready(schemas, predicate_positions, cfg)
+        except Exception as exc:
+            if cleanup_path is not None and cleanup_path.exists():
+                cleanup_path.unlink()
+            console.print(f"[bold red]Fail-fast[/bold red]: {exc}")
+            raise SystemExit(1) from exc
 
-        if args.create:
-            with session.conn.transaction():
-                _ensure_case_exists(session.conn, case_id, source_id, title)
-
-        _api_key = os.environ.get(cfg.extractor.api_key_env, "")
-        _key_hint = f"…{_api_key[-4:]}" if _api_key else "BRAK"
+        _api_key = os.environ.get(cfg.extractor.api_key_env, "").strip()
+        _key_hint = _mask_api_key(_api_key)
         console.print(
             f"[dim]Ekstrakcja (llm, model={cfg.extractor.gemini_model}, key={_key_hint}) -> {case_id}...[/dim]"
         )
-        extractor = get_extractor(
-            schemas,
-            cfg,
-            predicate_positions=predicate_positions,
+        console.print(
+            f"[dim]Fail-fast: sprawdzam odpowiedz LLM (timeout {cfg.extractor.preflight_timeout_s}s)[/dim]"
         )
-        result = extractor.extract(text, source_id=source_id)
+        console.print(f"  [blue]START[/blue] {case_id}")
+        try:
+            result = _run_extract_subprocess(
+                input_path,
+                source_id,
+                cfg.extractor.preflight_timeout_s,
+            )
+        except Exception as exc:
+            if cleanup_path is not None and cleanup_path.exists():
+                cleanup_path.unlink()
+            console.print(f"[bold red]Fail-fast[/bold red]: {exc}")
+            raise SystemExit(1) from exc
+
+        if cleanup_path is not None and cleanup_path.exists():
+            cleanup_path.unlink()
+
+        if cfg.extractor.sv_verification:
+            console.print(
+                f"[dim]Verifier: sprawdzam spojnosc ekstrakcji dla {case_id}...[/dim]"
+            )
+            try:
+                result = _run_verify_subprocess(
+                    result,
+                    cfg.extractor.preflight_timeout_s,
+                )
+            except Exception as exc:
+                console.print(f"[bold red]Verifier failed[/bold red]: {exc}")
+                raise SystemExit(1) from exc
 
         if args.dry_run:
             console.print(
@@ -1610,6 +1923,11 @@ def cmd_ingest_text(args: argparse.Namespace) -> None:
             )
             console.print(result.summary())
             return
+
+        if args.create:
+            with session.conn.transaction():
+                _ensure_case_exists(session.conn, case_id, source_id, title)
+            session.conn.commit()
 
         session.save_extraction_result(result, case_id=case_id, source_text=text)
 
@@ -1634,13 +1952,11 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
       pn3 ingest-folder text_cases/ --pattern "TC-*.txt"
       pn3 ingest-folder text_cases/ --workers 8
     """
-    import threading
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from pathlib import Path
 
     from config import ProjectConfig
     from db import DBSession
-    from nlp import get_extractor
 
     folder = Path(args.folder)
     if not folder.is_dir():
@@ -1656,8 +1972,8 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
     cfg = ProjectConfig.load()
     workers = getattr(args, "workers", 8) or 8
 
-    _api_key = os.environ.get(cfg.extractor.api_key_env, "")
-    _key_hint = f"…{_api_key[-4:]}" if _api_key else "BRAK"
+    _api_key = os.environ.get(cfg.extractor.api_key_env, "").strip()
+    _key_hint = _mask_api_key(_api_key)
     backend_info = f"llm, model={cfg.extractor.gemini_model}, key={_key_hint}"
     console.print(
         f"[dim]Folder: {folder}  |  pliki: {len(files)}  |  "
@@ -1665,11 +1981,16 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
     )
 
     # ── Faza 1: wczytaj pliki i utwórz case'y w DB (sekwencyjnie) ─────────────
-    tasks: list[tuple[str, str, str]] = []  # (case_id, source_id, text)
+    tasks: list[tuple[str, str, str, Path]] = []  # (case_id, source_id, text, file_path)
     skipped = 0
     with DBSession.connect() as session:
         schemas = session.load_cluster_schemas()
         predicate_positions = session.load_predicate_positions()
+        try:
+            _assert_extraction_runtime_ready(schemas, predicate_positions, cfg)
+        except Exception as exc:
+            console.print(f"[bold red]Fail-fast[/bold red]: {exc}")
+            raise SystemExit(1) from exc
         for f in files:
             case_id = f.stem
             source_id = f"{case_id}-TEXT"
@@ -1678,14 +1999,7 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
                 console.print(f"  [yellow]SKIP[/yellow] {f.name} — pusty plik")
                 skipped += 1
                 continue
-            try:
-                with session.conn.transaction():
-                    _ensure_case_exists(session.conn, case_id, source_id, case_id)
-                session.conn.commit()
-                tasks.append((case_id, source_id, text))
-            except Exception as exc:
-                console.print(f"  [bold red]ERR[/bold red] {case_id} (setup): {exc}")
-                skipped += 1
+            tasks.append((case_id, source_id, text, f))
 
     if not tasks:
         console.print("[yellow]Brak zadań do przetworzenia.[/yellow]")
@@ -1693,22 +2007,43 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
 
     # ── Faza 2: ekstrakcja równoległa ─────────────────────────────────────────
     # Każdy wątek tworzy własny ekstraktor – osobna sesja HTTP do LLM.
+    console.print(
+        f"[dim]Preflight: sprawdzam jedna realna ekstrakcje (timeout {cfg.extractor.preflight_timeout_s}s)[/dim]"
+    )
+    probe_case_id, probe_source_id, probe_text, probe_path = tasks[0]
+    console.print(f"  [blue]START[/blue] {probe_case_id} [dim](preflight)[/dim]")
+    try:
+        probe_result = _run_extract_subprocess(
+            probe_path,
+            probe_source_id,
+            cfg.extractor.preflight_timeout_s,
+        )
+    except Exception as exc:
+        console.print(f"[bold red]Preflight failed[/bold red]: {exc}")
+        raise SystemExit(1) from exc
+    console.print(f"  [green]preflight OK[/green] {probe_case_id}")
+
     print_lock = threading.Lock()
 
-    def _extract_one(task: tuple[str, str, str]):
-        case_id, source_id, text = task
-        local_extractor = get_extractor(
-            schemas,
-            cfg,
-            predicate_positions=predicate_positions,
+    def _extract_one(task: tuple[str, str, str, Path]):
+        case_id, source_id, text, file_path = task
+        with print_lock:
+            console.print(f"  [blue]START[/blue] {case_id}")
+        result = _run_extract_subprocess(
+            file_path,
+            source_id,
+            cfg.extractor.preflight_timeout_s,
         )
-        return case_id, source_id, text, local_extractor.extract(text, source_id=source_id)
+        return case_id, source_id, text, result
 
-    results: list[tuple[str, str, str, object]] = []
+    results: list[tuple[str, str, str, object]] = [
+        (probe_case_id, probe_source_id, probe_text, probe_result)
+    ]
     errors_extract = 0
 
+    remaining_tasks = tasks[1:]
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(_extract_one, t): t[0] for t in tasks}
+        futures = {pool.submit(_extract_one, t): t[0] for t in remaining_tasks}
         for fut in as_completed(futures):
             case_id = futures[fut]
             try:
@@ -1720,13 +2055,32 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
                     console.print(f"  [bold red]ERR[/bold red] {case_id} (extract): {exc}")
                 errors_extract += 1
 
+    if cfg.extractor.sv_verification:
+        console.print("[dim]Verifier: sprawdzam spojnosc wyekstrahowanych wynikow...[/dim]")
+        verified_results: list[tuple[str, str, str, object]] = []
+        errors_verify = 0
+        for case_id, sid, text, result in sorted(results, key=lambda r: r[0]):
+            try:
+                verified = _run_verify_subprocess(
+                    result,
+                    cfg.extractor.preflight_timeout_s,
+                )
+                console.print(f"  [magenta]verified[/magenta] {case_id}")
+                verified_results.append((case_id, sid, text, verified))
+            except Exception as exc:
+                console.print(f"  [bold red]ERR[/bold red] {case_id} (verify): {exc}")
+                errors_verify += 1
+        results = verified_results
+    else:
+        errors_verify = 0
+
     if args.dry_run:
         for case_id, _sid, _txt, result in sorted(results, key=lambda r: r[0]):
             console.print(f"  [yellow]DRY[/yellow] {case_id}: {result.summary()}")
         console.print(
             f"\n[bold]ingest-folder dry-run[/bold]: "
             f"[cyan]{len(results)} extracted[/cyan]  "
-            f"[yellow]{skipped} pominięto[/yellow]  [red]{errors_extract} błędów[/red]"
+            f"[yellow]{skipped} pominięto[/yellow]  [red]{errors_extract + errors_verify} błędów[/red]"
         )
         return
 
@@ -1735,6 +2089,9 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
     with DBSession.connect() as session:
         for case_id, _sid, text, result in sorted(results, key=lambda r: r[0]):
             try:
+                with session.conn.transaction():
+                    _ensure_case_exists(session.conn, case_id, f"{case_id}-TEXT", case_id)
+                session.conn.commit()
                 session.save_extraction_result(result, case_id=case_id, source_text=text)
                 console.print(f"  [green]OK[/green]  {case_id}: {result.summary()}")
                 ok += 1
@@ -1746,7 +2103,7 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
         f"\n[bold]ingest-folder zakończony[/bold]: "
         f"[green]{ok} OK[/green]  "
         f"[yellow]{skipped} pominięto[/yellow]  "
-        f"[red]{errors_extract + errors_save} błędów[/red]"
+        f"[red]{errors_extract + errors_verify + errors_save} błędów[/red]"
     )
 
 
@@ -2402,6 +2759,8 @@ def cmd_eval(args: argparse.Namespace) -> None:
 
 
 _COMMANDS = {
+    "_extract-json": (cmd_extract_json, argparse.SUPPRESS),
+    "_verify-json": (cmd_verify_json, argparse.SUPPRESS),
     "entity-types":  (cmd_entity_types,  "List entity type definitions"),
     "predicates":    (cmd_predicates,    "List predicate definitions with roles"),
     "clusters":      (cmd_clusters,      "List cluster definitions with domain values"),
@@ -2435,7 +2794,27 @@ def main() -> None:
     sub.required = True
     for name, (_, help_text) in _COMMANDS.items():
         cmd_parser = sub.add_parser(name, help=help_text)
-        if name == "run-case":
+        if name == "_extract-json":
+            cmd_parser.add_argument(
+                "--file",
+                required=True,
+                metavar="PATH",
+                help=argparse.SUPPRESS,
+            )
+            cmd_parser.add_argument(
+                "--source-id",
+                required=True,
+                metavar="ID",
+                help=argparse.SUPPRESS,
+            )
+        elif name == "_verify-json":
+            cmd_parser.add_argument(
+                "--input-json",
+                required=True,
+                metavar="PATH",
+                help=argparse.SUPPRESS,
+            )
+        elif name == "run-case":
             cmd_parser.add_argument("case_id", help="Case ID, e.g. TC-001")
         elif name == "proof":
             cmd_parser.add_argument("proof_id", help="Proof run ID (facts.proof_id / proof_runs.proof_id)")

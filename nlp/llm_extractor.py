@@ -15,7 +15,7 @@ import json
 from collections import defaultdict
 from typing import Any
 
-from nn.graph_builder import ClusterSchema
+from data_model.cluster import ClusterSchema
 from runtime_env import get_required_env
 
 from .llm_prompt import (
@@ -47,6 +47,7 @@ class LLMExtractor:
     ) -> None:
         try:
             from google import genai
+            from google.genai import types as genai_types
         except ImportError as exc:
             raise ImportError(
                 "LLMExtractor wymaga pakietu google-genai. "
@@ -62,7 +63,13 @@ class LLMExtractor:
             )
 
         api_key = get_required_env(config.api_key_env)
-        self._client = genai.Client(api_key=api_key)
+        timeout_ms = int(config.preflight_timeout_s * 1000)
+        self._http_options = genai_types.HttpOptions(timeout=timeout_ms)
+        self._genai_types = genai_types
+        self._client = genai.Client(
+            api_key=api_key,
+            http_options=self._http_options,
+        )
         self._predicate_positions = {
             pred.lower(): [role.upper() for role in roles]
             for pred, roles in predicate_positions.items()
@@ -167,21 +174,29 @@ class LLMExtractor:
             "response_mime_type": "application/json",
         }
 
+    def close(self) -> None:
+        """Closes the underlying Gemini client if it exposes a close method."""
+        close = getattr(self._client, "close", None)
+        if callable(close):
+            close()
+
     # ------------------------------------------------------------------
     # Gemini API
     # ------------------------------------------------------------------
 
     def _call_gemini(self, prompt: str) -> dict[str, Any]:
         """Wywołaj Gemini i zwróć sparsowany JSON."""
+        request_config = self._genai_types.GenerateContentConfig(
+            httpOptions=self._http_options,
+            systemInstruction=self._system_prompt,
+            temperature=self._config.temperature,
+            responseMimeType="application/json",
+            responseSchema=self._response_schema,
+        )
         response = self._client.models.generate_content(
             model=self._config.gemini_model,
             contents=prompt,
-            config={
-                "system_instruction": self._system_prompt,
-                "temperature": self._config.temperature,
-                "response_mime_type": "application/json",
-                "response_schema": self._response_schema,
-            },
+            config=request_config,
         )
         response_text = response.text
         if response_text is None:

@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING
 
 import psycopg
 
+from data_model.cluster import ClusterSchema, ClusterStateRow
 from data_model.entity import Entity
 from data_model.fact import FactStatus
-from nn.graph_builder import ClusterSchema, ClusterStateRow
 
 from .case_repo import load_case as load_case_data
 from .case_repo import resolve_case_id_int

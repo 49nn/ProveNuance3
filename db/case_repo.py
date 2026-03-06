@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import psycopg
 
+from data_model.cluster import ClusterStateRow
 from data_model.entity import Entity
 from data_model.fact import Fact
 from data_model.rule import Rule
-from nn.graph_builder import ClusterStateRow
 
 from .cluster_repo import load_cluster_states_for_case
 from .entity_repo import load_entities_for_case

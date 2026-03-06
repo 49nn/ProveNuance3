@@ -15,12 +15,13 @@ import torch
 
 log = logging.getLogger(__name__)
 
+from data_model.cluster import ClusterSchema, ClusterStateRow
 from data_model.common import ConstTerm
 from data_model.rule import LiteralType
 from nn.config import NNConfig
 from nn.entity_memory import EntityMemoryBiasEncoder
 from nn.gating import ExceptionGateBank
-from nn.graph_builder import ClusterSchema, ClusterStateRow, EdgeTypeSpec, GraphBuilder
+from nn.graph_builder import EdgeTypeSpec, GraphBuilder
 from nn.inference import NeuralInference
 from nn.message_passing import HeteroMessagePassingBank
 from nn.proposer import NeuralProposer

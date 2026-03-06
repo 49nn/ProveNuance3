@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from data_model.cluster import ClusterStateRow
 from data_model.fact import Fact, FactStatus
-from nn.graph_builder import ClusterStateRow
 from sv.types import GroundAtom, ProofNode
 
 

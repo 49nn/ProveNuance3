@@ -22,6 +22,10 @@ from .entity import (
     EntityLinking,
     Entity,
 )
+from .cluster import (
+    ClusterSchema,
+    ClusterStateRow,
+)
 from .fact import (
     FactStatus,
     NeuralTraceItem,
@@ -46,6 +50,8 @@ __all__ = [
     "RoleArg", "VarTerm", "ConstTerm", "Term", "RuleArg",
     # entity
     "MemorySlotEntry", "EntityLinking", "Entity",
+    # cluster
+    "ClusterSchema", "ClusterStateRow",
     # fact
     "FactStatus", "NeuralTraceItem", "FactProvenance",
     "FactSource", "FactTime", "Fact",

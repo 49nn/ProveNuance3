@@ -6,12 +6,12 @@ import pytest
 
 pytest.importorskip("torch")
 
+from data_model.cluster import ClusterSchema, ClusterStateRow
 from data_model.common import RoleArg, Span, TruthDistribution
 from data_model.entity import Entity
 from data_model.fact import Fact, FactSource, FactStatus
 from nlp.ontology_alignment import align_extraction_to_ontology
 from nlp.result import ExtractionResult
-from nn.graph_builder import ClusterSchema, ClusterStateRow
 
 
 def test_aligns_fact_roles_to_current_ontology() -> None:

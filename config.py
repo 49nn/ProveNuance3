@@ -23,10 +23,13 @@ class ExtractorConfig:
     max_retries: int = 2
     sv_verification: bool = True
     api_key_env: str = "GEMINI_API_KEY"
+    preflight_timeout_s: int = 120
 
     def __post_init__(self) -> None:
         if self.backend != "llm":
             raise ValueError("Only backend='llm' is supported.")
+        if self.preflight_timeout_s <= 0:
+            raise ValueError("preflight_timeout_s must be > 0.")
 
 
 @dataclass

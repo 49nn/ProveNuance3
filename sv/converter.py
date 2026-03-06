@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING
 
 import clingo
 
+from data_model.cluster import ClusterSchema, ClusterStateRow
 from data_model.fact import Fact
-from nn.graph_builder import ClusterSchema, ClusterStateRow
 from sv._utils import to_clingo_id
 from sv.types import GroundAtom
 

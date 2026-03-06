@@ -246,14 +246,25 @@ def solve(program: str) -> frozenset[clingo.Symbol]:
     ctl.ground([("base", [])])
 
     result: frozenset[clingo.Symbol] = frozenset()
-    with ctl.solve(yield_=True) as handle:  # type: ignore[union-attr]
+    result_holder = {"value": result}
+    with ctl.solve(
+        async_=True,
+        on_model=lambda model: _capture_model(model, result_holder),
+    ) as handle:
         if not handle.wait(_CLINGO_TIMEOUT_SECONDS):
             handle.cancel()
             raise TimeoutError(
                 f"Clingo solve przekroczyl limit {_CLINGO_TIMEOUT_SECONDS}s"
             )
-        for model in handle:
-            result = frozenset(model.symbols(shown=True))
+        handle.get()
+        result = result_holder["value"]
 
     log.debug("Clingo solve: %d atomow w modelu", len(result))
     return result
+
+
+def _capture_model(
+    model: clingo.Model,
+    result_holder: dict[str, frozenset[clingo.Symbol]],
+) -> None:
+    result_holder["value"] = frozenset(model.symbols(shown=True))

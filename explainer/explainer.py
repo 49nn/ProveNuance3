@@ -30,7 +30,7 @@ from runtime_env import get_required_env
 from .prompt import build_system_prompt, build_user_message
 
 if TYPE_CHECKING:
-    from nn.graph_builder import ClusterStateRow
+    from data_model.cluster import ClusterStateRow
     from sv.proof import ProofRun
 
 

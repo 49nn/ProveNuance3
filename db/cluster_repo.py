@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import psycopg
 
-from nn.graph_builder import ClusterStateRow
+from data_model.cluster import ClusterStateRow
 
 
 def resolve_existing_entity_ids(

@@ -13,7 +13,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
+
+_PROMPT_TEMPLATE_PATH = Path(__file__).with_name("gen_ontology_prompt_template.txt")
 
 
 # ---------------------------------------------------------------------------
@@ -597,3 +601,16 @@ def _opt_str(d: dict[str, Any], key: str) -> str | None:
         return None
     s = str(v).strip()
     return s if s else None
+
+
+@lru_cache(maxsize=1)
+def _load_ontology_prompt_template() -> str:
+    return _PROMPT_TEMPLATE_PATH.read_text(encoding="utf-8")
+
+
+def build_ontology_prompt(regulatory_text: str) -> str:
+    """
+    Render ontology generation prompt from the external template file.
+    """
+    template = _load_ontology_prompt_template()
+    return template.replace("{{REGULATORY_TEXT}}", regulatory_text)

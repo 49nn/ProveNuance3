@@ -8,10 +8,10 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
+from data_model.cluster import ClusterSchema, ClusterStateRow
 from data_model.common import ProvenanceItem, RoleArg, Span, TruthDistribution
 from data_model.entity import Entity
 from data_model.fact import Fact, FactSource, FactStatus
-from nn.graph_builder import ClusterSchema, ClusterStateRow
 
 from .result import ExtractionResult
 

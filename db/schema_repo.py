@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import psycopg
 
-from nn.graph_builder import ClusterSchema
+from data_model.cluster import ClusterSchema
 
 
 def load_cluster_schemas(conn: psycopg.Connection) -> list[ClusterSchema]:
