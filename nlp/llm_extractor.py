@@ -16,11 +16,11 @@ Przepływ:
 from __future__ import annotations
 
 import json
-import os
 from collections import defaultdict
 from typing import Any
 
 from nn.graph_builder import ClusterSchema
+from runtime_env import get_required_env
 from sv.schema import PREDICATE_POSITIONS
 
 from .llm_prompt import (
@@ -29,6 +29,7 @@ from .llm_prompt import (
     build_system_prompt,
     parse_llm_response,
 )
+from .ontology_alignment import align_extraction_to_ontology
 from .result import ExtractionResult
 
 
@@ -47,6 +48,7 @@ class LLMExtractor:
         cluster_schemas: list[ClusterSchema],
         config: Any,  # ExtractorConfig — import lazy by uniknąć cyklicznych importów
         year: int = 2026,
+        predicate_positions: dict[str, list[str]] | None = None,
     ) -> None:
         try:
             from google import genai
@@ -56,14 +58,10 @@ class LLMExtractor:
                 "Zainstaluj: pip install google-genai"
             ) from exc
 
-        api_key = os.environ.get(config.api_key_env, "")
-        if not api_key:
-            raise EnvironmentError(
-                f"Brak klucza API Gemini. Ustaw zmienną środowiskową: {config.api_key_env}"
-            )
-
+        api_key = get_required_env(config.api_key_env)
         self._client = genai.Client(api_key=api_key)
-        self._system_prompt = build_system_prompt(cluster_schemas, PREDICATE_POSITIONS)
+        self._predicate_positions = predicate_positions or dict(PREDICATE_POSITIONS)
+        self._system_prompt = build_system_prompt(cluster_schemas, self._predicate_positions)
         self._response_schema = build_response_schema()
         self._schemas = cluster_schemas
         self._config = config
@@ -74,7 +72,10 @@ class LLMExtractor:
         if config.sv_verification:
             try:
                 from sv import SymbolicVerifier
-                self._sv = SymbolicVerifier(cluster_schemas=cluster_schemas)
+                self._sv = SymbolicVerifier(
+                    cluster_schemas=cluster_schemas,
+                    predicate_positions=self._predicate_positions or None,
+                )
             except ImportError:
                 pass  # clingo niedostępne — pomijamy SV walidację
 
@@ -107,7 +108,8 @@ class LLMExtractor:
 
             if not conflicts:
                 # Brak konfliktów — parsujemy i zwracamy
-                result = parse_llm_response(raw, source_id, self._year, self._schemas)
+                result = parse_llm_response(raw, source_id, self._year, self._schemas, text=text)
+                result = self._align(result)
                 if self._sv is not None:
                     result = self._sv_validate(result)
                 return result
@@ -122,7 +124,8 @@ class LLMExtractor:
             else:
                 # Wyczerpano retries — parsuj z odrzuconymi konfliktami
                 raw_to_use = last_raw or raw
-                result = parse_llm_response(raw_to_use, source_id, self._year, self._schemas)
+                result = parse_llm_response(raw_to_use, source_id, self._year, self._schemas, text=text)
+                result = self._align(result)
                 result = self._mark_conflicted(result, raw_to_use)
                 if self._sv is not None:
                     result = self._sv_validate(result)
@@ -130,7 +133,7 @@ class LLMExtractor:
 
         # Nie powinniśmy tu dotrzeć — powyższa pętla zawsze zwraca
         raw_fallback = last_raw or {}
-        return parse_llm_response(raw_fallback, source_id, self._year, self._schemas)
+        return self._align(parse_llm_response(raw_fallback, source_id, self._year, self._schemas, text=text))
 
     # ------------------------------------------------------------------
     # Inspekcja promptu (przed wysłaniem)
@@ -174,7 +177,10 @@ class LLMExtractor:
                 "response_schema": self._response_schema,
             },
         )
-        return json.loads(response.text)
+        response_text = response.text
+        if response_text is None:
+            raise ValueError("Gemini returned an empty response body")
+        return json.loads(response_text)
 
     # ------------------------------------------------------------------
     # Wykrywanie konfliktów w surowej odpowiedzi LLM
@@ -305,3 +311,11 @@ class LLMExtractor:
         Zwraca result bez modyfikacji (deduplication nastąpiła już w parserze).
         """
         return result
+
+    def _align(self, result: ExtractionResult) -> ExtractionResult:
+        return align_extraction_to_ontology(
+            result,
+            predicate_positions=self._predicate_positions,
+            cluster_schemas=self._schemas,
+            year=self._year,
+        )

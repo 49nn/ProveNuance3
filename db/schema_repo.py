@@ -32,3 +32,25 @@ def load_cluster_schemas(conn: psycopg.Connection) -> list[ClusterSchema]:
         )
         for row in rows
     ]
+
+
+def load_predicate_positions(conn: psycopg.Connection) -> dict[str, list[str]]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                lower(pd.name) AS predicate_name,
+                pr.role_name,
+                pr.position
+            FROM predicate_definitions pd
+            JOIN predicate_roles pr ON pr.predicate_id = pd.id
+            GROUP BY pd.name, pr.role_name, pr.position
+            ORDER BY lower(pd.name), pr.position
+            """
+        )
+        rows = cur.fetchall()
+
+    positions: dict[str, list[str]] = {}
+    for predicate_name, role_name, _position in rows:
+        positions.setdefault(str(predicate_name), []).append(str(role_name).upper())
+    return positions

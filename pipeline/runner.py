@@ -53,6 +53,7 @@ class ProposeVerifyRunner:
         cls,
         cluster_schemas: list[ClusterSchema],
         config: NNConfig | None = None,
+        predicate_positions: dict[str, list[str]] | None = None,
     ) -> ProposeVerifyRunner:
         """
         Build runner from cluster schemas (without case data).
@@ -113,7 +114,10 @@ class ProposeVerifyRunner:
         memory_encoder = EntityMemoryBiasEncoder(cluster_schemas, config)
 
         nn_inference = NeuralInference(proposer, graph_builder, memory_encoder, config)
-        verifier = SymbolicVerifier(cluster_schemas)
+        verifier = SymbolicVerifier(
+            cluster_schemas,
+            predicate_positions=predicate_positions,
+        )
 
         return cls(nn_inference, verifier)
 

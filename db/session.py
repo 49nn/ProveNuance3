@@ -20,7 +20,7 @@ from .fact_repo import attach_proof_run_to_facts, upsert_fact
 from .proof_repo import save_proof_run
 from .ontology_repo import save_ontology as _save_ontology
 from .rule_repo import load_rules, upsert_learned_rules
-from .schema_repo import load_cluster_schemas
+from .schema_repo import load_cluster_schemas, load_predicate_positions
 
 if TYPE_CHECKING:
     from data_model.fact import Fact
@@ -45,6 +45,9 @@ class DBSession:
 
     def load_cluster_schemas(self) -> list[ClusterSchema]:
         return load_cluster_schemas(self.conn)
+
+    def load_predicate_positions(self) -> dict[str, list[str]]:
+        return load_predicate_positions(self.conn)
 
     def load_rules(self, enabled_only: bool = True) -> list["Rule"]:
         return load_rules(self.conn, enabled_only=enabled_only)

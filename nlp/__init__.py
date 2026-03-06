@@ -47,6 +47,7 @@ def get_extractor(
     cluster_schemas: list,
     config=None,
     year: int | None = None,
+    predicate_positions: dict[str, list[str]] | None = None,
 ) -> "TextExtractor | LLMExtractor":
     """
     Fabryka ekstraktora na podstawie konfiguracji projektu.
@@ -76,9 +77,9 @@ def get_extractor(
 
     if ext_cfg.backend == "llm":
         from .llm_extractor import LLMExtractor
-        return LLMExtractor(cluster_schemas, ext_cfg, resolved_year)
+        return LLMExtractor(cluster_schemas, ext_cfg, resolved_year, predicate_positions)
 
-    return TextExtractor(cluster_schemas, resolved_year)
+    return TextExtractor(cluster_schemas, resolved_year, predicate_positions)
 
 
 __all__ = [

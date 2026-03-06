@@ -34,6 +34,7 @@ from .patterns import (
     ClusterRule,
     FactRule,
 )
+from .ontology_alignment import align_extraction_to_ontology
 from .result import ExtractionResult
 
 # ---------------------------------------------------------------------------
@@ -78,9 +79,12 @@ class TextExtractor:
         self,
         cluster_schemas: list[ClusterSchema],
         year: int = 2026,
+        predicate_positions: dict[str, list[str]] | None = None,
     ) -> None:
         self.schemas: dict[str, ClusterSchema] = {s.name: s for s in cluster_schemas}
+        self.cluster_schemas = list(cluster_schemas)
         self.year = year
+        self.predicate_positions = predicate_positions or {}
 
     # ------------------------------------------------------------------
     # Publiczne API
@@ -113,14 +117,32 @@ class TextExtractor:
         # 6. Klastry
         cluster_states = self._extract_cluster_states(text, entity_pos)
 
-        # Dodaj syntetyczne encje wygenerowane przez fakty i klastry
-        entities = self._add_synthetic_entities(entities, facts, cluster_states, source_id)
-
-        return ExtractionResult(
+        result = ExtractionResult(
             entities=entities,
             facts=facts,
             cluster_states=cluster_states,
             source_id=source_id,
+        )
+        result = align_extraction_to_ontology(
+            result,
+            predicate_positions=self.predicate_positions,
+            cluster_schemas=self.cluster_schemas,
+            year=self.year,
+        )
+
+        # Dodaj syntetyczne encje wygenerowane przez fakty i klastry
+        entities = self._add_synthetic_entities(
+            result.entities,
+            result.facts,
+            result.cluster_states,
+            source_id,
+        )
+
+        return ExtractionResult(
+            entities=entities,
+            facts=result.facts,
+            cluster_states=result.cluster_states,
+            source_id=result.source_id,
         )
 
     # ------------------------------------------------------------------

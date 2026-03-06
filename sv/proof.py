@@ -30,6 +30,29 @@ def _to_cid(s: str) -> str:
     return ("e_" + safe) if (not safe or safe[0].isdigit()) else safe
 
 
+_ARG_ROLE_RE = re.compile(r"^ARG(\d+)$", re.IGNORECASE)
+
+
+def _resolve_role_name(
+    role: str,
+    predicate: str,
+    predicate_positions: dict[str, list[str]] | None,
+) -> str:
+    role_upper = role.upper()
+    m = _ARG_ROLE_RE.match(role_upper)
+    if m is None or not predicate_positions:
+        return role_upper
+
+    positions = predicate_positions.get(predicate)
+    if not positions:
+        return role_upper
+
+    idx = int(m.group(1))
+    if idx >= len(positions):
+        return role_upper
+    return positions[idx].upper()
+
+
 # ---------------------------------------------------------------------------
 # Backtracking grounder
 # ---------------------------------------------------------------------------
@@ -38,6 +61,7 @@ def _match_literal(
     lit: RuleBodyLiteral,
     atom: GroundAtom,
     subst: dict[str, str],
+    predicate_positions: dict[str, list[str]] | None = None,
 ) -> dict[str, str] | None:
     """
     Próbuje rozszerzyć podstawienie `subst` tak, by literał `lit` pasował do `atom`.
@@ -54,7 +78,7 @@ def _match_literal(
     new_subst = dict(subst)
 
     for arg in lit.args:
-        role = arg.role.upper()
+        role = _resolve_role_name(arg.role, lit.predicate, predicate_positions)
         atom_val = atom_lookup.get(role)
         if atom_val is None:
             return None
@@ -75,11 +99,15 @@ def _match_literal(
     return new_subst
 
 
-def _apply_to_head(head: RuleHead, subst: dict[str, str]) -> GroundAtom | None:
+def _apply_to_head(
+    head: RuleHead,
+    subst: dict[str, str],
+    predicate_positions: dict[str, list[str]] | None = None,
+) -> GroundAtom | None:
     """Podstawia zmienne w głowie reguły → GroundAtom."""
     bindings: list[tuple[str, str]] = []
     for arg in head.args:
-        role = arg.role.upper()
+        role = _resolve_role_name(arg.role, head.predicate, predicate_positions)
         term = arg.term
         if isinstance(term, VarTerm):
             if term.var == "_":
@@ -94,7 +122,9 @@ def _apply_to_head(head: RuleHead, subst: dict[str, str]) -> GroundAtom | None:
 
 
 def _apply_to_literal(
-    lit: RuleBodyLiteral, subst: dict[str, str]
+    lit: RuleBodyLiteral,
+    subst: dict[str, str],
+    predicate_positions: dict[str, list[str]] | None = None,
 ) -> GroundAtom:
     """
     Podstawia zmienne w literale ciała → GroundAtom.
@@ -102,7 +132,7 @@ def _apply_to_literal(
     """
     bindings: list[tuple[str, str]] = []
     for arg in lit.args:
-        role = arg.role.upper()
+        role = _resolve_role_name(arg.role, lit.predicate, predicate_positions)
         term = arg.term
         if isinstance(term, VarTerm):
             if term.var == "_":
@@ -119,6 +149,7 @@ def _match_body(
     pred_index: dict[str, list[GroundAtom]],
     subst: dict[str, str],
     matched: list[GroundAtom],
+    predicate_positions: dict[str, list[str]] | None = None,
 ) -> Iterator[tuple[dict[str, str], list[GroundAtom]]]:
     """
     Backtracking: dopasowuje kolejne literały pozytywne do atomów z indeksu.
@@ -131,12 +162,22 @@ def _match_body(
         return
     lit, rest = pos_lits[0], pos_lits[1:]
     for atom in pred_index.get(lit.predicate, []):
-        new_subst = _match_literal(lit, atom, subst)
+        new_subst = _match_literal(lit, atom, subst, predicate_positions)
         if new_subst is not None:
-            yield from _match_body(rest, pred_index, new_subst, matched + [atom])
+            yield from _match_body(
+                rest,
+                pred_index,
+                new_subst,
+                matched + [atom],
+                predicate_positions,
+            )
 
 
-def ground_rule(rule: Rule, atoms: set[GroundAtom]) -> Iterator[GroundRule]:
+def ground_rule(
+    rule: Rule,
+    atoms: set[GroundAtom],
+    predicate_positions: dict[str, list[str]] | None = None,
+) -> Iterator[GroundRule]:
     """
     Generuje wszystkie poprawne uziemienia reguły dla danego zbioru atomów.
     Używane TYLKO do ekstrakcji proweniencji (nie do rozwiązywania).
@@ -148,14 +189,23 @@ def ground_rule(rule: Rule, atoms: set[GroundAtom]) -> Iterator[GroundRule]:
     pos_lits = [lit for lit in rule.body if lit.literal_type == LiteralType.pos]
     naf_lits = [lit for lit in rule.body if lit.literal_type == LiteralType.naf]
 
-    for subst, matched_atoms in _match_body(pos_lits, pred_index, {}, []):
-        head = _apply_to_head(rule.head, subst)
+    for subst, matched_atoms in _match_body(
+        pos_lits,
+        pred_index,
+        {},
+        [],
+        predicate_positions,
+    ):
+        head = _apply_to_head(rule.head, subst, predicate_positions)
         if head is None:
             continue
         # pos_body: faktycznie dopasowane atomy (pełne bindingi, bez partial)
         pos_body = tuple(matched_atoms)
         # neg_body: partial atoms (wildcardy pominięte — do any_match)
-        neg_body = tuple(_apply_to_literal(lit, subst) for lit in naf_lits)
+        neg_body = tuple(
+            _apply_to_literal(lit, subst, predicate_positions)
+            for lit in naf_lits
+        )
         yield GroundRule(
             rule_id=rule.rule_id,
             stratum=rule.metadata.stratum,
@@ -192,6 +242,7 @@ def extract_proof_dag(
     base_atoms: set[GroundAtom],
     rules: list[Rule],
     id_map: dict[str, str],
+    predicate_positions: dict[str, list[str]] | None = None,
 ) -> dict[GroundAtom, ProofNode]:
     """
     Dla każdego atomu derywowanego przez reguły (nie bazowego) szuka
@@ -218,7 +269,7 @@ def extract_proof_dag(
     # Atomy derywowane
     to_explain = derived_atoms - base_atoms
     for atom in to_explain:
-        node = _find_proof_node(atom, derived_atoms, rules)
+        node = _find_proof_node(atom, derived_atoms, rules, predicate_positions)
         if node is not None:
             proofs[atom] = node
 
@@ -229,12 +280,13 @@ def _find_proof_node(
     target: GroundAtom,
     model: set[GroundAtom],
     rules: list[Rule],
+    predicate_positions: dict[str, list[str]] | None = None,
 ) -> ProofNode | None:
     """Szuka pierwszej reguły która mogła wyprowadzić target."""
     for rule in rules:
         if rule.head.predicate != target.predicate:
             continue
-        for gr in ground_rule(rule, model):
+        for gr in ground_rule(rule, model, predicate_positions):
             if gr.head != target:
                 continue
             # Sprawdź warunki pozytywne

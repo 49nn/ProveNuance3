@@ -47,7 +47,11 @@ def _iter_case_queries(session: DBSession) -> Iterator[tuple[str, str, str]]:
 def test_case_queries_match_expected_results() -> None:
     with DBSession.connect() as session:
         schemas = session.load_cluster_schemas()
-        runner = ProposeVerifyRunner.from_schemas(schemas)
+        predicate_positions = session.load_predicate_positions()
+        runner = ProposeVerifyRunner.from_schemas(
+            schemas,
+            predicate_positions=predicate_positions,
+        )
 
         for case_id, query_text, expected in _iter_case_queries(session):
             entities, facts, rules, states = session.load_case(case_id)

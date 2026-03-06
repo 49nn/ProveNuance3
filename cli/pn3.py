@@ -11,23 +11,18 @@ import subprocess
 import sys
 from dataclasses import replace
 
-# Load .env from project root (silently ignored if file doesn't exist)
-try:
-    from dotenv import load_dotenv
-    load_dotenv(Path(__file__).parent.parent / ".env")
-except ImportError:
-    pass
-
 import psycopg2
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
+from runtime_env import load_project_env
 
 # Force UTF-8 output so Rich unicode symbols work on Windows legacy consoles.
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 console = Console()
+load_project_env()
 
 DSN = dict(
     host=os.getenv("PN3_HOST", "localhost"),
@@ -1475,14 +1470,13 @@ def cmd_llm_prompt(args: argparse.Namespace) -> None:
     from config import ProjectConfig
     from db import DBSession
     from nlp.llm_prompt import build_response_schema, build_system_prompt
-    from sv.schema import PREDICATE_POSITIONS
-
     cfg = ProjectConfig.load()
 
     with DBSession.connect() as session:
         schemas = session.load_cluster_schemas()
+        predicate_positions = session.load_predicate_positions()
 
-    system_prompt = build_system_prompt(schemas, PREDICATE_POSITIONS)
+    system_prompt = build_system_prompt(schemas, predicate_positions)
 
     if args.raw:
         print(system_prompt)
@@ -1525,7 +1519,7 @@ def cmd_llm_prompt(args: argparse.Namespace) -> None:
 
     console.print(
         f"\n[dim]Schemas loaded: {len(schemas)} clusters | "
-        f"Predicates: {len(PREDICATE_POSITIONS)}[/dim]"
+        f"Predicates: {len(predicate_positions)}[/dim]"
     )
 
 
@@ -1598,6 +1592,7 @@ def cmd_ingest_text(args: argparse.Namespace) -> None:
 
     with DBSession.connect() as session:
         schemas = session.load_cluster_schemas()
+        predicate_positions = session.load_predicate_positions()
 
         if args.create:
             with session.conn.transaction():
@@ -1610,7 +1605,11 @@ def cmd_ingest_text(args: argparse.Namespace) -> None:
             if cfg.extractor.backend == "llm" else
             f"[dim]Ekstrakcja ({cfg.extractor.backend}) → {case_id}...[/dim]"
         )
-        extractor = get_extractor(schemas, cfg)
+        extractor = get_extractor(
+            schemas,
+            cfg,
+            predicate_positions=predicate_positions,
+        )
         result = extractor.extract(text, source_id=source_id)
 
         if args.dry_run:
@@ -1686,6 +1685,7 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
     skipped = 0
     with DBSession.connect() as session:
         schemas = session.load_cluster_schemas()
+        predicate_positions = session.load_predicate_positions()
         for f in files:
             case_id = f.stem
             source_id = f"{case_id}-TEXT"
@@ -1713,7 +1713,11 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
 
     def _extract_one(task: tuple[str, str, str]):
         case_id, source_id, text = task
-        local_extractor = get_extractor(schemas, cfg)
+        local_extractor = get_extractor(
+            schemas,
+            cfg,
+            predicate_positions=predicate_positions,
+        )
         return case_id, source_id, text, local_extractor.extract(text, source_id=source_id)
 
     results: list[tuple[str, str, str, object]] = []
@@ -1773,9 +1777,13 @@ def cmd_run_case(args: argparse.Namespace) -> None:
     case_id = args.case_id
     with DBSession.connect() as session:
         schemas = session.load_cluster_schemas()
+        predicate_positions = session.load_predicate_positions()
         entities, facts, rules, cluster_states = session.load_case(case_id)
 
-        runner = ProposeVerifyRunner.from_schemas(schemas)
+        runner = ProposeVerifyRunner.from_schemas(
+            schemas,
+            predicate_positions=predicate_positions,
+        )
         result = runner.run(entities, facts, rules, cluster_states)
         session.save_pipeline_result(result, case_id=case_id)
 

@@ -121,7 +121,11 @@ class SymbolicVerifier:
 
         # 5. Proof DAG
         proof_nodes = extract_proof_dag(
-            set(derived), base_atoms, rules, registry.mapping()
+            set(derived),
+            base_atoms,
+            rules,
+            registry.mapping(),
+            all_positions,
         )
 
         # 6. Aktualizacja statusów wejściowych faktów
@@ -181,6 +185,7 @@ class SymbolicVerifier:
           - unknown: brak reguł i brak atomu w modelu
         """
         model = set(result.derived_atoms)
+        all_positions = {**self.predicate_positions, **self._derived_positions(rules)}
         if query_atom in model:
             return "proved"
 
@@ -190,7 +195,7 @@ class SymbolicVerifier:
             if rule.head.predicate != query_atom.predicate:
                 continue
             has_rule_for_head = True
-            for grounded in ground_rule(rule, model):
+            for grounded in ground_rule(rule, model, all_positions):
                 if grounded.head != query_atom:
                     continue
                 if not all(a in model for a in grounded.pos_body):

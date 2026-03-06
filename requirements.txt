@@ -13,6 +13,7 @@ pgvector
 # === NLP ===
 spacy
 sentence-transformers
+python-dotenv
 
 # === Experiments ===
 wandb

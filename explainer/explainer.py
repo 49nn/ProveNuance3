@@ -21,11 +21,11 @@ Podgląd bez wywołania API:
 """
 from __future__ import annotations
 
-import os
 from typing import TYPE_CHECKING, Any
 
 from data_model.entity import Entity
 from data_model.fact import Fact, FactStatus, NeuralTraceItem
+from runtime_env import get_required_env
 
 from .prompt import build_system_prompt, build_user_message
 
@@ -51,12 +51,7 @@ class LLMExplainer:
                 "Zainstaluj: pip install google-genai"
             ) from exc
 
-        api_key = os.environ.get(config.api_key_env, "")
-        if not api_key:
-            raise EnvironmentError(
-                f"Brak klucza API Gemini. Ustaw zmienną środowiskową: {config.api_key_env}"
-            )
-
+        api_key = get_required_env(config.api_key_env)
         self._client = genai.Client(api_key=api_key)
         self._system_prompt = build_system_prompt(config.language)
         self._config = config
