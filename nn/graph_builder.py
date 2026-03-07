@@ -176,7 +176,12 @@ class GraphBuilder:
         memory_biases: dict[str, torch.Tensor] | None,
     ) -> None:
         node_type = f"c_{schema.name}"
-        matching = [e for e in entities if e.type == schema.entity_type]
+        # Primary match by entity_type; fallback to entities with pre-existing cluster states
+        # (handles ontology entity_type name mismatches, e.g. English vs Polish names).
+        by_type = {e.entity_id for e in entities if e.type == schema.entity_type}
+        by_state = {eid for (eid, cname) in state_lookup if cname == schema.name}
+        relevant = by_type | by_state
+        matching = [e for e in entities if e.entity_id in relevant]
 
         n = len(matching)
         dim = schema.dim

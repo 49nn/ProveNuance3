@@ -24,7 +24,7 @@ from data_model.self_training import (
     PseudoFactLabel,
     SelfTrainingRound,
 )
-from db import connect
+from db import connect, load_predicate_positions, load_rules
 from db.entity_repo import load_entities_by_ids
 from db.self_training_repo import (
     assign_case_split,
@@ -261,6 +261,29 @@ def _load_case_query_catalog(
         ]
 
 
+def _load_case_query_counts(
+    conn,
+    case_ids: list[str],
+) -> dict[str, int]:
+    if not case_ids:
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT c.case_id, COUNT(cq.id)
+            FROM cases c
+            LEFT JOIN case_queries cq ON cq.case_id = c.id
+            WHERE c.case_id = ANY(%s)
+            GROUP BY c.case_id
+            """,
+            (case_ids,),
+        )
+        return {
+            str(case_id): int(count)
+            for case_id, count in cur.fetchall()
+        }
+
+
 def _text_excerpt(text: str, limit: int = 240) -> str:
     flattened = " ".join(text.split())
     if len(flattened) <= limit:
@@ -314,6 +337,13 @@ def _write_case_query_template(
         return
 
     raise ValueError(f"Unsupported template format: {path.suffix} (expected .csv or .jsonl)")
+
+
+def _write_case_query_records(path: Path, rows: list[dict[str, str]]) -> None:
+    if path.suffix.lower() not in {".jsonl", ".ndjson"}:
+        raise ValueError("draft-case-queries output must be .jsonl or .ndjson")
+    lines = [json.dumps(row, ensure_ascii=False) for row in rows]
+    path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
 
 
 def _build_eval_metrics(
@@ -799,6 +829,94 @@ def cmd_import_case_queries(args: argparse.Namespace) -> None:
     console.print(
         f"[bold green]import-case-queries {mode}[/bold green]: "
         f"inserted={inserted}, skipped={skipped}, cases={len(case_ids)}"
+    )
+
+
+def cmd_draft_case_queries(args: argparse.Namespace) -> None:
+    from config import ProjectConfig
+    from nlp.case_query_drafter import CaseQueryDrafter
+
+    cfg = ProjectConfig.load()
+    output_path = Path(args.output)
+
+    with connect() as conn:
+        predicate_positions = load_predicate_positions(conn)
+        if not predicate_positions:
+            console.print("[bold red]Brak aktywnej ontologii z predykatami.[/bold red]")
+            raise SystemExit(1)
+
+        preferred_predicates = sorted({
+            rule.head.predicate.lower()
+            for rule in load_rules(conn, enabled_only=True)
+            if getattr(rule, "head", None) is not None and rule.head.predicate
+        })
+
+        rows = _load_case_query_catalog(
+            conn,
+            case_ids=args.case,
+            split=args.split,
+            all_cases=bool(args.all),
+        )
+        if not args.include_existing:
+            query_counts = _load_case_query_counts(conn, [row["case_id"] for row in rows])
+            rows = [row for row in rows if query_counts.get(row["case_id"], 0) == 0]
+
+    if not rows:
+        console.print("[bold red]No cases selected for draft-case-queries.[/bold red]")
+        raise SystemExit(1)
+
+    console.print(
+        f"[dim]draft-case-queries: cases={len(rows)} | model={cfg.extractor.gemini_model} "
+        f"| max_queries={args.max_queries}[/dim]"
+    )
+
+    drafter = CaseQueryDrafter(
+        predicate_positions,
+        cfg.extractor,
+        year=cfg.year,
+        preferred_predicates=preferred_predicates,
+    )
+    draft_rows: list[dict[str, str]] = []
+    errors = 0
+    try:
+        for row in rows:
+            case_id = row["case_id"]
+            console.print(f"  [blue]START[/blue] {case_id} [dim](draft)[/dim]")
+            try:
+                drafts = drafter.draft(
+                    case_id=case_id,
+                    title=row["title"],
+                    case_text=row["source_content"],
+                    max_queries=args.max_queries,
+                )
+                if not drafts:
+                    console.print(f"  [yellow]EMPTY[/yellow] {case_id}")
+                    continue
+                for item in drafts:
+                    note_parts = [part for part in [item.get("notes", ""), item.get("rationale", "")] if part]
+                    draft_rows.append({
+                        "case_id": case_id,
+                        "query": item["query"],
+                        "expected_result": item["expected_result"],
+                        "notes": " | ".join(note_parts),
+                        "rationale": item.get("rationale", ""),
+                        "dataset_split": row["dataset_split"],
+                        "source_id": row["source_id"],
+                        "draft_model": cfg.extractor.gemini_model,
+                    })
+                console.print(f"  [cyan]drafted[/cyan] {case_id}: queries={len(drafts)}")
+            except Exception as exc:
+                console.print(f"  [bold red]ERR[/bold red] {case_id} (draft): {exc}")
+                errors += 1
+                if not args.continue_on_error:
+                    raise SystemExit(1) from exc
+    finally:
+        drafter.close()
+
+    _write_case_query_records(output_path, draft_rows)
+    console.print(
+        f"[bold green]draft-case-queries completed[/bold green]: "
+        f"drafts={len(draft_rows)}, cases={len(rows)}, errors={errors}, file={output_path}"
     )
 
 
@@ -1371,6 +1489,17 @@ def main() -> None:
     cmd.add_argument("--replace", action="store_true", help="Replace existing queries for affected cases before import")
     cmd.add_argument("--dry-run", action="store_true")
     cmd.set_defaults(func=cmd_import_case_queries)
+
+    cmd = sub.add_parser("draft-case-queries", help="Draft reviewable case queries with LLM and export JSONL")
+    target = cmd.add_mutually_exclusive_group(required=True)
+    target.add_argument("--case", action="append", help="Case ID to draft (repeatable)")
+    target.add_argument("--split", choices=["train_gold", "train_unlabeled", "holdout"], help="Draft for all cases in a split")
+    target.add_argument("--all", action="store_true", help="Draft for all cases")
+    cmd.add_argument("--output", required=True, help="Output JSONL path")
+    cmd.add_argument("--max-queries", type=int, default=3, help="Maximum number of drafted queries per case")
+    cmd.add_argument("--include-existing", action="store_true", help="Also draft for cases that already have case_queries")
+    cmd.add_argument("--continue-on-error", action="store_true", help="Keep drafting remaining cases after an LLM/API error")
+    cmd.set_defaults(func=cmd_draft_case_queries)
 
     cmd = sub.add_parser("collect-pseudo-labels", help="Run teacher inference and export pseudo-labels")
     cmd.add_argument("round_id", help="Round identifier, e.g. R1")

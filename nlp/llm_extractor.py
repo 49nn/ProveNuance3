@@ -74,7 +74,7 @@ class LLMExtractor:
             pred.lower(): [role.upper() for role in roles]
             for pred, roles in predicate_positions.items()
         }
-        self._system_prompt = build_system_prompt(cluster_schemas, self._predicate_positions)
+        self._system_prompt = build_system_prompt(cluster_schemas, self._predicate_positions, year=year)
         self._response_schema = build_response_schema()
         self._schemas = cluster_schemas
         self._config = config
@@ -214,10 +214,87 @@ class LLMExtractor:
         Sprawdza:
         1. Cluster konflikty: ta sama (entity_id, cluster_name) z różnymi wartościami
         2. Fakt konflikty: ten sam (predicate, obligatoryjne_args) z różnymi opcjonalnymi args
+        3. Nieznany predykat (nie w ontologii)
+        4. Nieznana rola dla predykatu
+        5. Encja użyta w fakcie lub klastrze ale nieobecna w entities[]
+        6. Zły format daty (entity_id wygląda jak data ale nie pasuje D_YYYY-MM-DD)
 
         Zwraca listę opisów konfliktów po polsku, gotowych do wstawienia w correction prompt.
         """
+        import re as _re
+        _DATE_RE = _re.compile(r"^D_\d{4}-\d{2}-\d{2}$")
         conflicts: list[str] = []
+
+        known_predicates = {p.upper() for p in self._predicate_positions}
+        known_roles_for: dict[str, set[str]] = {
+            p.upper(): {r.upper() for r in roles}
+            for p, roles in self._predicate_positions.items()
+        }
+
+        declared_entity_ids: set[str] = {
+            str(e.get("entity_id", "")).strip()
+            for e in raw.get("entities", [])
+            if e.get("entity_id")
+        }
+
+        # 3. Nieznane predykaty + 4. Nieznane role + 6. Zły format daty ─────
+        referenced_entity_ids: set[str] = set()
+        for f in raw.get("facts", []):
+            predicate = str(f.get("predicate", "")).strip().upper()
+            if not predicate:
+                continue
+
+            if predicate not in known_predicates:
+                conflicts.append(
+                    f"FAKT {predicate}: nieznany predykat — użyj tylko predykatów z listy w instrukcji systemowej"
+                )
+                continue
+
+            valid_roles = known_roles_for[predicate]
+            for a in f.get("args", []):
+                role = str(a.get("role", "")).strip().upper()
+                eid = str(a.get("entity_id") or "").strip()
+                if eid:
+                    referenced_entity_ids.add(eid)
+
+                if role and role not in valid_roles:
+                    conflicts.append(
+                        f"FAKT {predicate}: nieznana rola '{role}' "
+                        f"— dozwolone role: {', '.join(sorted(valid_roles))}"
+                    )
+
+                if eid and eid.startswith("D_") and not _DATE_RE.match(eid):
+                    conflicts.append(
+                        f"FAKT {predicate}: nieprawidłowy format daty '{eid}' "
+                        f"— wymagany format D_YYYY-MM-DD, np. D_2026-03-05"
+                    )
+
+        # 6. Zły format daty w entities[] ────────────────────────────────────
+        for e in raw.get("entities", []):
+            eid = str(e.get("entity_id") or "").strip()
+            if eid and eid.startswith("D_") and not _DATE_RE.match(eid):
+                conflicts.append(
+                    f"ENCJA '{eid}': nieprawidłowy format daty "
+                    f"— wymagany format D_YYYY-MM-DD, np. D_2026-03-05"
+                )
+
+        # 6. Zły format daty w cluster_states[] ──────────────────────────────
+        for cs in raw.get("cluster_states", []):
+            eid = str(cs.get("entity_id") or "").strip()
+            referenced_entity_ids.add(eid)
+            if eid and eid.startswith("D_") and not _DATE_RE.match(eid):
+                conflicts.append(
+                    f"KLASTER (entity_id='{eid}'): nieprawidłowy format daty "
+                    f"— wymagany format D_YYYY-MM-DD"
+                )
+
+        # 5. Encje w faktach/klastrach ale nie w entities[] ───────────────────
+        missing = referenced_entity_ids - declared_entity_ids - {""}
+        for eid in sorted(missing):
+            conflicts.append(
+                f"ENCJA '{eid}' jest używana w fakcie lub klastrze, "
+                f"ale nie istnieje w entities[] — dodaj ją"
+            )
 
         # 1. Konflikty klastrów ─────────────────────────────────────────────
         # Grupuj po (entity_id, cluster_name) → zbierz unikalne wartości
@@ -243,7 +320,7 @@ class LLMExtractor:
         # Grupuj po (predicate, wymagane_role) → zbierz opcjonalne role
         # Wymagane role = te bez DATE, COUPON, COMPLAINT, ACCOUNT, CHARGEBACK
         _optional_roles = frozenset({
-            "DATE", "COUPON", "COMPLAINT", "ACCOUNT", "CHARGEBACK",
+            "DATE", "COUPON", "COUPON1", "COUPON2", "COMPLAINT", "ACCOUNT", "CHARGEBACK",
             "DELIVERY", "STATEMENT", "RETURN_SHIPMENT", "PAYMENT",
         })
 

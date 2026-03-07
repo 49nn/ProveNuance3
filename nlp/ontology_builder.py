@@ -11,7 +11,6 @@ Eksportuje:
 """
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -75,6 +74,7 @@ class OntologyResult:
     clusters: list[ClusterSpec] = field(default_factory=list)
     rules: list[RuleSpec] = field(default_factory=list)
     source_id: str = "regulation"
+    validation_errors: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
         return (
@@ -83,97 +83,6 @@ class OntologyResult:
             f"clusters={len(self.clusters)} "
             f"rules={len(self.rules)}"
         )
-
-
-# ---------------------------------------------------------------------------
-# Prompt builder
-# ---------------------------------------------------------------------------
-
-_FEW_SHOT_RULES = """\
-Przykłady reguł strukturalnych:
-
-  Przepis: "Umowa zostaje zawarta z chwilą potwierdzenia przyjęcia Zamówienia."
-  head: {"predicate":"contract_formed","args":[{"role":"ORDER","term":{"var":"O"}}]}
-  body: [{"literal_type":"pos","predicate":"order_accepted","args":[
-    {"role":"STORE","term":{"var":"_"}},
-    {"role":"ORDER","term":{"var":"O"}},
-    {"role":"DATE","term":{"var":"_"}}
-  ]}]
-  stratum: 0
-
-  Przepis: "Konsument może odstąpić w ciągu 14 dni od doręczenia, chyba że towar jest cyfrowy i pobieranie zostało rozpoczęte."
-  head: {"predicate":"can_withdraw","args":[
-    {"role":"CUSTOMER","term":{"var":"C"}},
-    {"role":"ORDER","term":{"var":"O"}}
-  ]}
-  body: [{"literal_type":"pos","predicate":"customer_type","args":[
-    {"role":"CUSTOMER","term":{"var":"C"}},
-    {"role":"TYPE","term":{"const":"consumer"}}
-  ]}, ...]
-  stratum: 2
-
-  Przepis: "Wyjątek: treść cyfrowa + zgoda + pobieranie."
-  head: {"predicate":"ab_withdraw","args":[
-    {"role":"CUSTOMER","term":{"var":"C"}},
-    {"role":"ORDER","term":{"var":"O"}}
-  ]}
-  body: [{"literal_type":"pos","predicate":"product_type","args":[
-    {"role":"PRODUCT","term":{"var":"P"}},
-    {"role":"TYPE","term":{"const":"digital"}}
-  ]}, ...]
-  stratum: 1
-
-Konwencje Clingo:
-- Zmienne: wielkie litery (O, C, D) lub podkreślnik _ (wildcard)
-- Stałe: małe litery (consumer, yes, no, card)
-- NAF: not predykat(...)
-- Stratum 0 = fakty i reguły bez NAF; 1 = reguły z NAF nad stratum 0; 2 = NAF nad stratum 1
-- rule_id: "{moduł}.{nazwa_predykatu_głowy}" (snake_case)
-"""
-
-
-def build_ontology_prompt(regulatory_text: str) -> str:
-    return "\n".join([
-        "Jesteś ekspertem od modelowania ontologii dla systemów prawnych e-commerce.",
-        "Na podstawie poniższego regulaminu wyciągnij pełną ontologię.",
-        "",
-        "## TYPY ENCJI",
-        "Rozpoznaj wszystkie typy obiektów domenowych (rzeczowniki pełniące role).",
-        "Przykłady: ORDER, CUSTOMER, PRODUCT, PAYMENT, DELIVERY, COUPON, ACCOUNT, CHARGEBACK, COMPLAINT, DATE.",
-        "Dla każdego podaj name (UPPER_SNAKE_CASE), description i source_span_text.",
-        "",
-        "## PREDYKATY N-ARNE (zdarzenia)",
-        "Każde zdarzenie opisane w regulaminie = jeden predykat.",
-        "Przykłady: ORDER_PLACED, PAYMENT_MADE, DELIVERED, COMPLAINT_SUBMITTED.",
-        "Role pozycyjne: CUSTOMER, ORDER, DATE, STORE, itp.",
-        "Literały (wartości inline, nie encje): REASON, RESULT, AMOUNT, PAYMENT_METHOD → entity_type: null.",
-        "Dla każdego podaj name, description, roles (position, role, entity_type) i source_span_text.",
-        "",
-        "## KLASTRY UNARNE (właściwości dyskretne)",
-        "Enumy/kategorie przypisane do encji — każdy klaster = zmienna dyskretna z softmax.",
-        "Przykłady: customer_type(CUSTOMER) ∈ {CONSUMER, BUSINESS}",
-        "           payment_method(ORDER) ∈ {CARD, TRANSFER, BLIK, COD}",
-        "Dla każdego podaj name (snake_case), entity_type, entity_role, value_role,",
-        "domain (lista wartości UPPER_CASE), description i source_span_text.",
-        "",
-        "## REGUŁY HORN + NAF",
-        _FEW_SHOT_RULES,
-        "Dla każdej reguły podaj rule_id, module (snake_case), head, body, stratum i source_span_text.",
-        "Predicate names w head/body zapisuj w lower_snake_case zgodnym z runtime LP.",
-        "Role w head/body muszą być nazwane semantycznie (ORDER, CUSTOMER, TYPE, VALUE), nigdy ARG0/ARG1.",
-        "Stałe w term.const zapisuj w lower_snake_case zgodnym z LP.",
-        "",
-        "## WAŻNE ZASADY",
-        "1. Dla KAŻDEGO elementu podaj source_span_text: dosłowny, minimalny cytat z regulaminu",
-        "   (jedno zdanie lub klauzula), który uzasadnia ten element.",
-        "2. Nazwy predykatów i entity_type: UPPER_SNAKE_CASE.",
-        "3. Nazwy klastrów: lower_snake_case.",
-        "4. Nie dodawaj elementów spoza tekstu regulaminu.",
-        "5. Jeśli reguła ma wyjątek (NAF), wyciągnij też regułę definiującą wyjątek.",
-        "",
-        "## REGULAMIN",
-        regulatory_text,
-    ])
 
 
 # ---------------------------------------------------------------------------
@@ -376,44 +285,106 @@ def parse_ontology_response(data: dict[str, Any], source_id: str) -> OntologyRes
             source_span_text=_opt_str(r, "source_span_text"),
         ))
 
+    rules, validation_errors = _validate_rules(rules, predicates)
+
     return OntologyResult(
         entity_types=entity_types,
         predicates=predicates,
         clusters=clusters,
         rules=rules,
         source_id=source_id,
+        validation_errors=validation_errors,
     )
 
-
-# ---------------------------------------------------------------------------
-# Parser clingo_text → head/body JSONB
-# ---------------------------------------------------------------------------
-
-def clingo_to_head_body(clingo_text: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def _validate_rules(
+    rules: list[RuleSpec],
+    predicates: list[PredicateSpec],
+) -> tuple[list[RuleSpec], list[str]]:
     """
-    Parsuje uproszczony clingo_text do head i body JSONB.
+    Filtruje reguły z błędami strukturalnymi.
+    Zwraca (valid_rules, error_descriptions).
 
-    Obsługuje:
-      pred(A, B) :- p1(A), not p2(B), p3(const).
-      fact_head(X).
-
-    Zmienne: [A-Z][A-Za-z0-9_]* lub _
-    Stałe: [a-z][A-Za-z0-9_]* lub cytowane
-
-    Zwraca (head_dict, body_list) zgodne ze schematem rule_repo.py.
+    Sprawdza:
+      1. Predykat głowy musi być zdefiniowany w predicates.
+      2. Arność głowy musi zgadzać się z liczbą ról predykatu.
+      3. Każda zmienna w głowie musi wystąpić w co najmniej jednym pozytywnym literale ciała
+         (zakaz unsafe variables).
     """
-    text = clingo_text.strip().rstrip(".")
+    pred_arity: dict[str, int] = {p.name.lower(): len(p.roles) for p in predicates}
+    valid: list[RuleSpec] = []
+    errors: list[str] = []
 
-    if " :- " in text:
-        head_part, body_part = text.split(" :- ", 1)
-    else:
-        head_part = text
-        body_part = ""
+    for rule in rules:
+        head_pred = rule.head.get("predicate", "").lower()
+        head_args = rule.head.get("args", [])
 
-    head = _parse_atom_to_head(head_part.strip())
-    body = _parse_body(body_part.strip()) if body_part else []
+        # 1. Predykat głowy musi być zdefiniowany
+        if head_pred not in pred_arity:
+            errors.append(
+                f"REGULA {rule.rule_id}: predykat glowy '{head_pred}' nie jest zdefiniowany "
+                f"w sekcji predykatow — dodaj go najpierw do ## PREDYKATY"
+            )
+            continue
 
-    return head, body
+        # 2. Arność musi zgadzać się z definicją
+        expected = pred_arity[head_pred]
+        if len(head_args) != expected:
+            errors.append(
+                f"REGULA {rule.rule_id}: predykat '{head_pred}' ma {expected} rol(e) "
+                f"w definicji, ale glowa reguly ma {len(head_args)} argumentow — wyrownaj arnosc"
+            )
+            continue
+
+        # 3. Zakaz unsafe variables: zbierz zmienne z głowy
+        head_vars: set[str] = {
+            arg["term"]["var"]
+            for arg in head_args
+            if isinstance(arg.get("term"), dict)
+            and "var" in arg["term"]
+            and arg["term"]["var"] != "_"
+        }
+
+        # Zmienne dostępne z pozytywnych literałów ciała
+        pos_body_vars: set[str] = set()
+        for lit in rule.body:
+            if lit.get("literal_type") == "pos":
+                for arg in lit.get("args", []):
+                    term = arg.get("term", {})
+                    if "var" in term and term["var"] != "_":
+                        pos_body_vars.add(term["var"])
+
+        unsafe = head_vars - pos_body_vars
+        if unsafe:
+            errors.append(
+                f"REGULA {rule.rule_id}: zmienne {sorted(unsafe)} w glowie nie sa "
+                f"bindowane przez zadne pozytywne literaly ciala (unsafe variables) — "
+                f"usun je z glowy lub dodaj literaly wiazace"
+            )
+            continue
+
+        valid.append(rule)
+
+    return valid, errors
+
+
+def build_ontology_correction_prompt(
+    original_text: str,
+    errors: list[str],
+) -> str:
+    """
+    Buduje prompt korekcyjny dla LLM gdy walidator odrzucil niepoprawne reguly.
+    """
+    error_block = "\n".join(f"  - {e}" for e in errors)
+    return (
+        "Poprzednia odpowiedz zawierala niepoprawne reguly, ktore zostaly odrzucone:\n"
+        f"{error_block}\n\n"
+        "Popraw ontologie eliminujac powyzsze bledy:\n"
+        "- Kazda regula z niezdefiniowanym predykatem glowy: dodaj predykat do sekcji predicates\n"
+        "- Kazda regula z niezgodna arnoscia: wyrownaj liczbe argumentow glowy do liczby rol predykatu\n"
+        "- Kazda regula z unsafe variables: usun zmienna z glowy lub dodaj literaly wiazace do body\n\n"
+        "Nie zmieniaj poprawnych elementow ontologii. Zwroc pelna poprawiona ontologie.\n\n"
+        f"Oryginalny regulamin:\n{original_text}"
+    )
 
 
 def head_body_to_clingo(
@@ -426,77 +397,6 @@ def head_body_to_clingo(
 
     body_text = ", ".join(_rule_literal_to_clingo(literal) for literal in body)
     return f"{head_text} :- {body_text}."
-
-
-def _parse_atom_to_head(atom_str: str) -> dict[str, Any]:
-    pred, args = _split_pred_args(atom_str)
-    return {
-        "predicate": pred,
-        "args": [
-            {"role": f"ARG{i}", "term": _term_dict(a)}
-            for i, a in enumerate(args)
-        ],
-    }
-
-
-def _parse_body(body_str: str) -> list[dict[str, Any]]:
-    literals = _split_top_level(body_str)
-    result = []
-    for lit in literals:
-        lit = lit.strip()
-        if not lit:
-            continue
-        naf = lit.startswith("not ")
-        if naf:
-            lit = lit[4:].strip()
-        pred, args = _split_pred_args(lit)
-        result.append({
-            "literal_type": "naf" if naf else "pos",
-            "predicate": pred,
-            "args": [
-                {"role": f"ARG{i}", "term": _term_dict(a)}
-                for i, a in enumerate(args)
-            ],
-        })
-    return result
-
-
-def _split_pred_args(atom_str: str) -> tuple[str, list[str]]:
-    m = re.match(r"(\w+)\((.*)\)$", atom_str.strip(), re.DOTALL)
-    if not m:
-        return atom_str.strip(), []
-    pred = m.group(1)
-    args_str = m.group(2)
-    return pred, _split_top_level(args_str)
-
-
-def _split_top_level(s: str) -> list[str]:
-    """Dzieli string po przecinkach, ignorując przecinki wewnątrz nawiasów."""
-    parts: list[str] = []
-    depth = 0
-    current: list[str] = []
-    for ch in s:
-        if ch == "(" :
-            depth += 1
-            current.append(ch)
-        elif ch == ")":
-            depth -= 1
-            current.append(ch)
-        elif ch == "," and depth == 0:
-            parts.append("".join(current).strip())
-            current = []
-        else:
-            current.append(ch)
-    if current:
-        parts.append("".join(current).strip())
-    return [p for p in parts if p]
-
-
-def _term_dict(token: str) -> dict[str, str]:
-    t = token.strip()
-    if t == "_" or (t and t[0].isupper()):
-        return {"var": t}
-    return {"const": t}
 
 
 def _normalize_rule_head(raw: Any) -> dict[str, Any] | None:

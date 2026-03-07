@@ -50,6 +50,7 @@ _CLAMP_M = 10.0
 def build_system_prompt(
     schemas: list[ClusterSchema],
     predicate_positions: dict[str, list[str]],
+    year: int = 2026,
 ) -> str:
     lines: list[str] = [
         "Jestes precyzyjnym ekstraktorem faktow prawnych z polskich opisow spraw e-commerce.",
@@ -58,7 +59,7 @@ def build_system_prompt(
         "## ENCJE",
         "Kopiuj entity_id dokladnie z tekstu. Nie normalizuj i nie upraszczaj identyfikatorow.",
         "Dopuszczalne sa nowe formaty, np. O183a, PAY183a, STMT11, PROD11, A205, CB20.",
-        "Polskie daty konwertuj do DATE entity_id w formacie D_YYYY-MM-DD.",
+        f"Polskie daty konwertuj do DATE entity_id w formacie D_YYYY-MM-DD, np. '5 marca {year}' -> D_{year}-03-05.",
         "",
         "Zawsze tworz:",
         f"  - {IMPLICIT_CUSTOMER} (type: CUSTOMER, canonical_name: Klient)",
@@ -69,7 +70,7 @@ def build_system_prompt(
         "## FAKTY",
         "Wyciagaj tylko fakty, ktore sa wprost wspomniane w tekscie.",
         "Pomin fakt, jesli nie masz pewnosci. role = nazwa roli pozycyjnej.",
-        "Dla rol opcjonalnych (DATE, COUPON, COMPLAINT, ACCOUNT, CHARGEBACK):",
+        "Dla rol opcjonalnych (DATE, COUPON, COUPON1, COUPON2, COMPLAINT, ACCOUNT, CHARGEBACK, DELIVERY, STATEMENT, RETURN_SHIPMENT, PAYMENT):",
         "  pomin argument, jesli nie mozesz ustalic encji - NIE blokuj calego faktu.",
         "",
     ]
@@ -104,10 +105,11 @@ def build_system_prompt(
         "## WAZNE ZASADY",
         "1. Jeden fakt = jedno zdarzenie. Nie duplikuj faktow.",
         "2. entity_id musi byc dokladnie takim ID jak w tekscie, np. O183a albo PAY11.",
-        "3. Daty polskie konwertuj do D_2026-MM-DD.",
-        "4. Literaly (REASON, RESULT, AMOUNT, PAYMENT_METHOD) zapisuj jako literal_value, nie entity_id.",
+        f"3. Kazda date konwertuj osobno do D_YYYY-MM-DD (np. '1 marca {year}' -> D_{year}-03-01, '12 marca {year}' -> D_{year}-03-12). Rozne daty = rozne entity_id.",
+        "4. Literaly (REASON, RESULT, DAYS, TYPE, ABUSE, ADDRESS, TIME_RANGE, INACTIVITY_PERIOD, VALUE, DESCRIPTION, PROOF) zapisuj jako literal_value, nie entity_id.",
+        "4b. Encje (FUNDS, METHOD i inne ID-podobne wartosci) zapisuj jako entity_id, nie literal_value.",
         "5. Klaster: maksymalnie 1 wartosc na pare (entity_id, cluster_name).",
-        "6. Jezeli encja nie jest wymieniona wprost, uzyj tylko CUST1 lub STORE1.",
+        "6. Jezeli encja (CUSTOMER, STORE) nie jest wymieniona wprost, uzyj CUST1 lub STORE1. Dla innych typow encji (PRODUCT, DELIVERY, PAYMENT itp.) bez wlasnego ID - pomin fakt.",
         "7. Nie wymyslaj nowych ID typu DEL_O123 albo PROD_O123, jesli tekst zawiera wlasne ID.",
         "8. Kazda encja referencjonowana przez fakt lub klaster musi istniec w entities[].",
         "9. Dla kazdego faktu podaj span_start/span_end i span_text.",

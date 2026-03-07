@@ -9,7 +9,6 @@ from .ontology_builder import (
     OntologyResult,
     build_ontology_prompt,
     build_ontology_schema,
-    clingo_to_head_body,
     parse_ontology_response,
 )
 from .result import ExtractionResult
@@ -53,5 +52,4 @@ __all__ = [
     "build_ontology_prompt",
     "build_ontology_schema",
     "parse_ontology_response",
-    "clingo_to_head_body",
 ]

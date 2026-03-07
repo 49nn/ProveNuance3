@@ -2111,6 +2111,56 @@ def cmd_ingest_folder(args: argparse.Namespace) -> None:
 # run-case
 # ---------------------------------------------------------------------------
 
+_STATUS_STYLE_RC: dict[str, str] = {
+    "observed":            "cyan",
+    "inferred_candidate":  "yellow",
+    "proved":              "bold green",
+    "rejected":            "red",
+    "retracted":           "dim",
+}
+
+
+def _print_run_case_facts(facts) -> None:
+    console.print()
+    console.print("[bold cyan]Facts[/bold cyan]")
+    for i, f in enumerate(facts, start=1):
+        args_str = ", ".join(
+            a.entity_id if a.entity_id is not None else a.literal_value
+            for a in f.args
+        )
+        truth_val = f.truth.value or "-"
+        conf = f"{f.truth.confidence:.2f}" if f.truth.confidence is not None else "-"
+        status_text = Text(f.status.value, style=_STATUS_STYLE_RC.get(f.status.value, ""))
+        header = Text(f"{i}. ", style="dim")
+        header.append(f.fact_id, style="bold yellow")
+        header.append("  ")
+        header.append(f.predicate, style="cyan")
+        header.append(f"({args_str})")
+        console.print(header)
+        console.print(f"   status=", status_text, f"  truth={truth_val} ({conf})")
+    console.print(f"[dim]{len(facts)} fact(s)[/dim]")
+
+
+def _print_run_case_cluster_states(cluster_states, schemas) -> None:
+    domain_by_name = {s.name: s.domain for s in schemas} if schemas else {}
+    console.print()
+    console.print("[bold cyan]Cluster States[/bold cyan]")
+    for cs in cluster_states:
+        domain = domain_by_name.get(cs.cluster_name, [])
+        if domain and len(cs.logits) == len(domain):
+            logit_str = "  ".join(f"{v}:{l:.2f}" for v, l in zip(domain, cs.logits))
+        else:
+            logit_str = "  ".join(f"{l:.2f}" for l in cs.logits)
+        clamp_info = ""
+        if cs.is_clamped:
+            clamp_info = f"  [{'bold' if cs.clamp_hard else 'dim'}]clamped({cs.clamp_source})[/{'bold' if cs.clamp_hard else 'dim'}]"
+        console.print(
+            f"  [yellow]{cs.entity_id}[/yellow]  [cyan]{cs.cluster_name}[/cyan]"
+            f"  [{logit_str}]{clamp_info}"
+        )
+    console.print(f"[dim]{len(cluster_states)} cluster_state(s)[/dim]")
+
+
 def cmd_run_case(args: argparse.Namespace) -> None:
     from db import DBSession
     from pipeline.runner import ProposeVerifyRunner
@@ -2130,6 +2180,8 @@ def cmd_run_case(args: argparse.Namespace) -> None:
 
     console.print(f"[bold green]run-case completed[/bold green]: {case_id}")
     console.print(result.summary())
+    _print_run_case_facts(result.facts)
+    _print_run_case_cluster_states(result.cluster_states, schemas)
 
 
 def _load_case_ids(selected: list[str] | None) -> list[str]:
@@ -2587,6 +2639,7 @@ def cmd_gen_ontology(args: argparse.Namespace) -> None:
     from config import ProjectConfig
     from db import DBSession
     from nlp.ontology_builder import (
+        build_ontology_correction_prompt,
         build_ontology_prompt,
         build_ontology_schema,
         parse_ontology_response,
@@ -2632,26 +2685,61 @@ def cmd_gen_ontology(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
     client = genai.Client(api_key=_api_key)
-    prompt = build_ontology_prompt(text)
     schema = build_ontology_schema()
+    _gen_cfg = {
+        "temperature": 0.0,
+        "response_mime_type": "application/json",
+        "response_schema": schema,
+    }
 
-    response = client.models.generate_content(
-        model=cfg.extractor.gemini_model,
-        contents=prompt,
-        config={
-            "temperature": 0.0,
-            "response_mime_type": "application/json",
-            "response_schema": schema,
-        },
-    )
-    raw: dict = _json.loads(response.text)
+    _max_retries: int = getattr(cfg.extractor, "max_retries", 2)
+    current_prompt: str = build_ontology_prompt(text)
+    result = None
+
+    for attempt in range(_max_retries + 1):
+        is_correction = attempt > 0
+        attempt_label = (
+            f"[dim]korekta {attempt}/{_max_retries}[/dim]"
+            if is_correction
+            else "[dim]attempt 1[/dim]"
+        )
+        console.print(f"  {attempt_label} — wywolanie Gemini ({cfg.extractor.gemini_model})...")
+
+        response = client.models.generate_content(
+            model=cfg.extractor.gemini_model,
+            contents=current_prompt,
+            config=_gen_cfg,
+        )
+        raw: dict = _json.loads(response.text)
+        result = parse_ontology_response(raw, source_id)
+
+        n_err = len(result.validation_errors)
+        if not result.validation_errors:
+            console.print(
+                f"  [green]OK[/green] — {result.summary()}"
+                + (f" (po {attempt} korekcie)" if attempt > 0 else "")
+            )
+            break
+
+        if attempt < _max_retries:
+            console.print(
+                f"  [yellow]Odrzucono {n_err} regul(e) — wysylam korekce ({attempt + 1}/{_max_retries})...[/yellow]"
+            )
+            for err in result.validation_errors:
+                console.print(f"    [dim]• {err}[/dim]")
+            current_prompt = build_ontology_correction_prompt(text, result.validation_errors)
+        else:
+            console.print(
+                f"  [bold red]Wyczerpano retries — zapisuje {len(result.rules)} poprawnych regul "
+                f"(odrzucono {n_err}).[/bold red]"
+            )
+            for err in result.validation_errors:
+                console.print(f"    [dim]• {err}[/dim]")
 
     if args.raw:
         print(_json.dumps(raw, indent=2, ensure_ascii=False))
         if args.dry_run:
             return
-
-    result = parse_ontology_response(raw, source_id)
 
     if args.dry_run:
         console.print(

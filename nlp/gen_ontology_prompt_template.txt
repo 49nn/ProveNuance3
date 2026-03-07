@@ -3,15 +3,22 @@ Na podstawie ponizszego regulaminu wyciagnij pelna ontologie.
 
 ## TYPY ENCJI
 Rozpoznaj wszystkie typy obiektow domenowych (rzeczowniki pelniace role).
-Przyklady: ORDER, CUSTOMER, PRODUCT, PAYMENT, DELIVERY, COUPON, ACCOUNT, CHARGEBACK, COMPLAINT, DATE.
-Dla kazdego podaj name (UPPER_SNAKE_CASE), description i source_span_text.
+Nazwy MUSZA byc po angielsku w UPPER_SNAKE_CASE.
+Preferowane nazwy (uzywaj ich gdy pasuja): ORDER, CUSTOMER, PRODUCT, PAYMENT, DELIVERY,
+COUPON, ACCOUNT, CHARGEBACK, COMPLAINT, DATE, STORE, AGREEMENT, TERM, METHOD, RETURN_SHIPMENT,
+STATEMENT, FUNDS, DISPUTE, RULE, CONTRACT, COST, PROOF.
+Dla kazdego podaj name (UPPER_SNAKE_CASE, po angielsku), description i source_span_text.
+WAZNE: kazdy typ encji MUSI byc uzywany w co najmniej jednej roli predykatu (entity_type != null).
+Nie twoz typow encji, ktore nie wystepuja w zadnej roli predykatu.
 
 ## PREDYKATY N-ARNE (zdarzenia)
 Kazde zdarzenie opisane w regulaminie = jeden predykat.
 Przyklady: ORDER_PLACED, PAYMENT_MADE, DELIVERED, COMPLAINT_SUBMITTED.
 Role pozycyjne: CUSTOMER, ORDER, DATE, STORE, itp.
-Literaly (wartosci inline, nie encje): REASON, RESULT, AMOUNT, PAYMENT_METHOD -> entity_type: null.
+Literaly (wartosci inline, nie encje): REASON, RESULT, AMOUNT, DAYS, TYPE -> entity_type: null.
 Dla kazdego podaj name, description, roles (position, role, entity_type) i source_span_text.
+WAZNE: kazdy predykat uzywany w glowie reguly MUSI byc zdefiniowany w tej sekcji.
+Nie mozna uzyc predykatu jako konkluzji reguly bez jego definicji tutaj.
 
 ## KLASTRY UNARNE (wlasciwosci dyskretne)
 Enumy/kategorie przypisane do encji - kazdy klaster = zmienna dyskretna z softmax.
@@ -19,6 +26,8 @@ Przyklady: customer_type(CUSTOMER) in {CONSUMER, BUSINESS}
            payment_method(ORDER) in {CARD, TRANSFER, BLIK, COD}
 Dla kazdego podaj name (snake_case), entity_type, entity_role, value_role,
 domain (lista wartosci UPPER_CASE), description i source_span_text.
+WAZNE: entity_type w klastrach MUSI byc po angielsku (np. CUSTOMER, ORDER, PRODUCT),
+zgodnie z typami encji zdefiniowanymi powyzej.
 
 ## REGULY HORN + NAF
 Przyklady regul strukturalnych:
@@ -60,6 +69,29 @@ Konwencje Clingo:
 - NAF: not predykat(...)
 - Stratum 0 = fakty i reguly bez NAF; 1 = reguly z NAF nad stratum 0; 2 = reguly z NAF nad stratum 1
 - rule_id: "{modul}.{nazwa_predykatu_glowy}" (snake_case)
+
+ZAKAZY (reguly ktore naruszaja ponizsze zasady beda odrzucone automatycznie):
+
+1. ZAKAZ unsafe variables: kazda zmienna w head musi wystepowac w co najmniej jednym
+   pozytywnym literale body. Jesli rola w head nie da sie wydedukowac z body, wyeliminuj ja
+   z predykatu lub zastap stala.
+   ZLE:  risk_transferred(R,P,C) :- product_delivered(P,C,D).   -- R nie jest w body
+   DOBRZE: risk_transferred(P,C) :- product_delivered(P,C,D).   -- wyeliminuj R
+
+2. ZAKAZ niezgodnosci arnosci: liczba argumentow w glowie reguly musi dokladnie odpowiadac
+   liczbie rol w definicji predykatu w sekcji ## PREDYKATY.
+   Jesli definicja can_withdraw ma role [CUSTOMER, ORDER], to kazda regula can_withdraw
+   musi miec dokladnie 2 argumenty.
+
+3. ZAKAZ predykatow pomocniczych do arytmetyki dat: nie twoz predykatow takich jak
+   DATE_ADD_DAYS, WITHDRAWAL_DATE_WITHIN_DAYS, CURRENT_DATE_AFTER.
+   Te predykaty nie maja implementacji i nie beda gruntowane przez Clingo.
+   Zamiast warunku datowego: upros regule do warunkow obserwowalnych (fakty bazowe),
+   albo pomin warunek jesli nie mozna go wyrazic bez arytmetyki.
+
+4. ZAKAZ predykatow w regule bez definicji: kazdy predykat w glowie reguly musi byc
+   wymieniony w sekcji ## PREDYKATY. Jesli wynikowy predykat nie istnieje w tej sekcji,
+   dodaj go tam najpierw.
 
 Dla kazdej reguly podaj rule_id, module (snake_case), head, body, stratum i source_span_text.
 Predicate names w head/body zapisuj w lower_snake_case zgodnym z runtime LP.

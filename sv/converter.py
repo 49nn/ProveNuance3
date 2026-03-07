@@ -100,8 +100,15 @@ def cluster_to_lp(
     Konwertuje stan klastra do LP string, np. 'customer_type(c1,consumer).'.
 
     Top-1 wartość wyznaczana przez argmax(logits); jeśli logits puste — None.
+    Dla nieclamped stanów zwraca None gdy margines top-1 vs top-2 < 1.0
+    (brak wystarczającej pewności — nie emitujemy faktu do LP).
     """
     if not state.logits:
+        return None
+
+    sorted_logits = sorted(state.logits, reverse=True)
+    margin = sorted_logits[0] - sorted_logits[1] if len(sorted_logits) > 1 else float("inf")
+    if not state.is_clamped and margin < 1.0:
         return None
 
     top_idx = max(range(len(state.logits)), key=lambda i: state.logits[i])

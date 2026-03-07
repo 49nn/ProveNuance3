@@ -173,6 +173,10 @@ def ground_rule(
     """
     Generuje wszystkie poprawne uziemienia reguły dla danego zbioru atomów.
     Używane TYLKO do ekstrakcji proweniencji (nie do rozwiązywania).
+
+    Obsługuje niezwiązane zmienne w głowie (unsafe vars): w LP są one obsługiwane
+    przez _sv_domain_(X), więc tutaj enumerujemy wartości domenowe dla każdej
+    zmiennej głowy, która nie jest wiązana przez ciało pozytywne.
     """
     pred_index: dict[str, list[GroundAtom]] = defaultdict(list)
     for atom in atoms:
@@ -181,6 +185,27 @@ def ground_rule(
     pos_lits = [lit for lit in rule.body if lit.literal_type == LiteralType.pos]
     naf_lits = [lit for lit in rule.body if lit.literal_type == LiteralType.naf]
 
+    # Zmienne bezpieczne: związane przez co najmniej jeden pos lit w ciele
+    safe_body_vars: set[str] = {
+        arg.term.var
+        for lit in pos_lits
+        for arg in lit.args
+        if isinstance(arg.term, VarTerm) and arg.term.var != "_"
+    }
+    # Niezwiązane zmienne głowy (unsafe): brak w cieniu pozytywnym
+    unsafe_head_vars: list[str] = [
+        arg.term.var
+        for arg in rule.head.args
+        if isinstance(arg.term, VarTerm) and arg.term.var != "_"
+        and arg.term.var not in safe_body_vars
+    ]
+    # Wartości domenowe do enumeracji (z _sv_domain_ w modelu)
+    domain_vals: list[str] = [
+        atom.bindings[0][1]
+        for atom in pred_index.get("_sv_domain_", [])
+        if atom.bindings
+    ]
+
     for subst, matched_atoms in _match_body(
         pos_lits,
         pred_index,
@@ -188,24 +213,43 @@ def ground_rule(
         [],
         predicate_positions,
     ):
-        head = _apply_to_head(rule.head, subst, predicate_positions)
-        if head is None:
-            continue
-        # pos_body: faktycznie dopasowane atomy (pełne bindingi, bez partial)
         pos_body = tuple(matched_atoms)
-        # neg_body: partial atoms (wildcardy pominięte — do any_match)
         neg_body = tuple(
             _apply_to_literal(lit, subst, predicate_positions)
             for lit in naf_lits
         )
-        yield GroundRule(
-            rule_id=rule.rule_id,
-            stratum=rule.metadata.stratum,
-            head=head,
-            pos_body=pos_body,
-            neg_body=neg_body,
-            substitution=tuple(sorted(subst.items())),
-        )
+
+        if not unsafe_head_vars:
+            # Normalny przypadek: wszystkie zmienne głowy są związane
+            head = _apply_to_head(rule.head, subst, predicate_positions)
+            if head is None:
+                continue
+            yield GroundRule(
+                rule_id=rule.rule_id,
+                stratum=rule.metadata.stratum,
+                head=head,
+                pos_body=pos_body,
+                neg_body=neg_body,
+                substitution=tuple(sorted(subst.items())),
+            )
+        else:
+            # Niezwiązane zmienne głowy: enumeruj wartości domenowe
+            from itertools import product as _product
+            for combo in _product(domain_vals, repeat=len(unsafe_head_vars)):
+                extended = dict(subst)
+                for var, val in zip(unsafe_head_vars, combo):
+                    extended[var] = val
+                head = _apply_to_head(rule.head, extended, predicate_positions)
+                if head is None:
+                    continue
+                yield GroundRule(
+                    rule_id=rule.rule_id,
+                    stratum=rule.metadata.stratum,
+                    head=head,
+                    pos_body=pos_body,
+                    neg_body=neg_body,
+                    substitution=tuple(sorted(extended.items())),
+                )
 
 
 # ---------------------------------------------------------------------------
