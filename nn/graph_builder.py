@@ -245,7 +245,9 @@ class GraphBuilder:
                 j = TRUTH_ORDER.index(fact.truth.value)
                 is_clamped[i] = True
                 clamp_hard[i] = True
-                # Logity ustawiane przez clamp.py (tu zero → clamp.py je nadpisze)
+                # Zachowaj preferowany indeks już na wejściu, aby hard clamp
+                # poprawnie odtworzył także F/U, nie tylko domyślne T.
+                logits[i, j] = 1.0
 
         data["fact"].x = logits
         data["fact"].is_clamped = is_clamped

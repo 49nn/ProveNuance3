@@ -73,7 +73,8 @@ def load_rules(
                 r.support,
                 r.precision_est,
                 r.last_validated_at,
-                r.constraints
+                r.constraints,
+                r.source_span_text
             FROM rules r
             JOIN rule_modules rm ON rm.id = r.module_id
             {where}
@@ -87,6 +88,7 @@ def load_rules(
             rule_id, language, head_json, body_json,
             stratum, learned, weight, support,
             precision_est, last_validated_at, constraints,
+            source_span_text,
         ) = row
         result.append(Rule(
             rule_id=rule_id,
@@ -101,6 +103,7 @@ def load_rules(
                 precision_est=precision_est,
                 last_validated_at=last_validated_at,
                 constraints=list(constraints) if constraints else [],
+                source_span_text=source_span_text,
             ),
         ))
     return result

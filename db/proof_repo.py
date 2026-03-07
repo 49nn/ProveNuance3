@@ -32,6 +32,62 @@ def _atom_to_str(atom: Any) -> str:
     return str(atom.predicate)
 
 
+def _load_rule_source_texts(
+    conn: psycopg.Connection,
+    rule_ids: list[str],
+) -> dict[str, str | None]:
+    """Ładuje source_span_text dla podanych rule_id (fragment tekstu regulaminu)."""
+    if not rule_ids:
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT rule_id, source_span_text FROM rules WHERE rule_id = ANY(%s)",
+            (rule_ids,),
+        )
+        return {row[0]: row[1] for row in cur.fetchall()}
+
+
+def _load_fact_source_texts(
+    conn: psycopg.Connection,
+    fact_ids: list[str],
+) -> dict[str, str | None]:
+    """
+    Ładuje fragment tekstu źródłowego dla podanych fact_id.
+    Wyciąga podzbiór sources.content[span.start:span.end] używając pierwszego spanu.
+    """
+    if not fact_ids:
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT f.fact_id, f.source_spans, s.content
+            FROM facts f
+            LEFT JOIN sources s ON s.source_id = f.source_id
+            WHERE f.fact_id = ANY(%s)
+            """,
+            (fact_ids,),
+        )
+        rows = cur.fetchall()
+
+    result: dict[str, str | None] = {}
+    for fact_id, source_spans_raw, content in rows:
+        if content is None or source_spans_raw is None:
+            result[fact_id] = None
+            continue
+        spans = source_spans_raw if isinstance(source_spans_raw, list) else []
+        if not spans:
+            result[fact_id] = None
+            continue
+        first = spans[0]
+        start = first.get("start")
+        end = first.get("end")
+        if start is None or end is None:
+            result[fact_id] = None
+            continue
+        result[fact_id] = content[start:end]
+    return result
+
+
 def _load_fact_atom_index(
     conn: psycopg.Connection,
     case_id_int: int,
@@ -82,6 +138,23 @@ def save_proof_run(
     fact_atom_index = _load_fact_atom_index(conn, case_id_int)
 
     ordered_atoms = sorted(proof_nodes.keys(), key=lambda a: _atom_to_str(a))
+
+    # Zbierz rule_id i fact_id do bulk-load source texts
+    all_rule_ids = [
+        proof_nodes[a].rule_id
+        for a in ordered_atoms
+        if proof_nodes[a].rule_id is not None
+    ]
+    all_base_fact_ids = [
+        fact_atom_index.get(_atom_key(a.predicate, a.bindings))
+        for a in ordered_atoms
+        if proof_nodes[a].rule_id is None
+    ]
+    all_base_fact_ids_clean = [fid for fid in all_base_fact_ids if fid]
+
+    rule_source_texts = _load_rule_source_texts(conn, all_rule_ids)
+    fact_source_texts = _load_fact_source_texts(conn, all_base_fact_ids_clean)
+
     proof_dag: dict[str, dict[str, object]] = {}
     step_rows: list[tuple[int, str | None, str, Jsonb, list[str]]] = []
 
@@ -96,12 +169,20 @@ def save_proof_run(
             if dep_fact_id:
                 used_fact_ids.append(dep_fact_id)
 
+        # Wyznacz source_span_text: dla reguły z regulaminu lub tekstu faktu bazowego
+        if node.rule_id is not None:
+            source_span_text: str | None = rule_source_texts.get(node.rule_id)
+        else:
+            own_fact_id = fact_atom_index.get(_atom_key(atom.predicate, atom.bindings))
+            source_span_text = fact_source_texts.get(own_fact_id) if own_fact_id else None
+
         proof_dag[atom_str] = {
-            "rule_id":     node.rule_id,
-            "depends_on":  [_atom_to_str(dep) for dep in node.pos_used],
-            "naf_checked": [_atom_to_str(dep) for dep in node.neg_checked],
-            "substitution": dict(node.substitution),
-            "status": "base" if node.rule_id is None else "derived",
+            "rule_id":          node.rule_id,
+            "depends_on":       [_atom_to_str(dep) for dep in node.pos_used],
+            "naf_checked":      [_atom_to_str(dep) for dep in node.neg_checked],
+            "substitution":     dict(node.substitution),
+            "status":           "base" if node.rule_id is None else "derived",
+            "source_span_text": source_span_text,
         }
 
         step_rows.append(

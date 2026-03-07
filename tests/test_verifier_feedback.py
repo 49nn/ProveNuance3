@@ -179,6 +179,87 @@ def test_verifier_explains_query_atom_even_without_candidate_fact() -> None:
     assert query_feedback.supporting_rule_ids == ("r_can_withdraw",)
 
 
+def test_runner_generates_rule_head_candidate_and_gets_blocked_feedback() -> None:
+    runner = ProposeVerifyRunner.from_schemas(
+        cluster_schemas=[],
+        predicate_positions={
+            "order_placed": ["ORDER"],
+            "order_cancelled": ["ORDER"],
+            "order_pending_refund": ["ORDER"],
+        },
+        max_refinement_rounds=1,
+    )
+
+    rules = [
+        Rule(
+            rule_id="r_pending_refund",
+            head=RuleHead(
+                predicate="order_pending_refund",
+                args=[_rule_arg("ORDER", "O")],
+            ),
+            body=[
+                RuleBodyLiteral(
+                    literal_type=LiteralType.pos,
+                    predicate="order_placed",
+                    args=[_rule_arg("ORDER", "O")],
+                ),
+                RuleBodyLiteral(
+                    literal_type=LiteralType.naf,
+                    predicate="order_cancelled",
+                    args=[_rule_arg("ORDER", "O")],
+                ),
+            ],
+            metadata=RuleMetadata(stratum=1, learned=False),
+        )
+    ]
+
+    facts = [
+        _fact(
+            "f_order",
+            "ORDER_PLACED",
+            [RoleArg(role="ORDER", entity_id="O1")],
+            status=FactStatus.observed,
+        ),
+        _fact(
+            "f_ab",
+            "ORDER_CANCELLED",
+            [RoleArg(role="ORDER", entity_id="O1")],
+            status=FactStatus.observed,
+        ),
+    ]
+
+    result = runner.run(entities=[], facts=facts, rules=rules, cluster_states=[])
+
+    assert len(result.candidate_feedback) == 1
+    feedback = result.candidate_feedback[0]
+    assert feedback.predicate == "order_pending_refund"
+    assert feedback.outcome == "blocked"
+    assert tuple(atom.predicate for atom in feedback.violated_naf) == ("order_cancelled",)
+    assert feedback.supporting_rule_ids == ("r_pending_refund",)
+
+
+def test_nn_preserves_rejected_false_fact_under_hard_clamp() -> None:
+    runner = ProposeVerifyRunner.from_schemas(
+        cluster_schemas=[],
+        predicate_positions={"seen": ["ENTITY"]},
+        max_refinement_rounds=1,
+    )
+
+    blocked_fact = _fact(
+        "f_blocked",
+        "SEEN",
+        [RoleArg(role="ENTITY", entity_id="E1")],
+        value="F",
+        status=FactStatus.rejected,
+    )
+
+    updated_facts, _ = runner.nn_inference.propose([], [blocked_fact], [], [])
+
+    assert len(updated_facts) == 1
+    assert updated_facts[0].status == FactStatus.rejected
+    assert updated_facts[0].truth.value == "F"
+
+
 def test_runner_refines_with_proved_and_blocked_feedback() -> None:
     runner = ProposeVerifyRunner.from_schemas(
         cluster_schemas=[

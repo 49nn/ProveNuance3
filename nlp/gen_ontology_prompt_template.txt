@@ -30,38 +30,50 @@ WAZNE: entity_type w klastrach MUSI byc po angielsku (np. CUSTOMER, ORDER, PRODU
 zgodnie z typami encji zdefiniowanymi powyzej.
 
 ## REGULY HORN + NAF
-Przyklady regul strukturalnych:
+Przyklady regul strukturalnych (source_span_text = doslowny cytat z regulaminu):
 
-  Przepis: "Umowa zostaje zawarta z chwila potwierdzenia przyjecia Zamowienia."
-  head: {"predicate":"contract_formed","args":[{"role":"ORDER","term":{"var":"O"}}]}
-  body: [{"literal_type":"pos","predicate":"order_accepted","args":[
-    {"role":"STORE","term":{"var":"_"}},
-    {"role":"ORDER","term":{"var":"O"}},
-    {"role":"DATE","term":{"var":"_"}}
-  ]}]
-  stratum: 0
+  {
+    "rule_id": "core.contract_formed",
+    "module": "core",
+    "head": {"predicate":"contract_formed","args":[{"role":"ORDER","term":{"var":"O"}}]},
+    "body": [{"literal_type":"pos","predicate":"order_accepted","args":[
+      {"role":"STORE","term":{"var":"_"}},
+      {"role":"ORDER","term":{"var":"O"}},
+      {"role":"DATE","term":{"var":"_"}}
+    ]}],
+    "stratum": 0,
+    "source_span_text": "Umowa sprzedazy zostaje zawarta z chwila potwierdzenia przyjecia Zamowienia przez Sklep (e-mail)."
+  }
 
-  Przepis: "Konsument moze odstapic w ciagu 14 dni od doreczenia, chyba ze towar jest cyfrowy i pobieranie zostalo rozpoczete."
-  head: {"predicate":"can_withdraw","args":[
-    {"role":"CUSTOMER","term":{"var":"C"}},
-    {"role":"ORDER","term":{"var":"O"}}
-  ]}
-  body: [{"literal_type":"pos","predicate":"customer_type","args":[
-    {"role":"CUSTOMER","term":{"var":"C"}},
-    {"role":"TYPE","term":{"const":"consumer"}}
-  ]}, ...]
-  stratum: 2
+  {
+    "rule_id": "core.can_withdraw",
+    "module": "core",
+    "head": {"predicate":"can_withdraw","args":[
+      {"role":"CUSTOMER","term":{"var":"C"}},
+      {"role":"ORDER","term":{"var":"O"}}
+    ]},
+    "body": [{"literal_type":"pos","predicate":"customer_type","args":[
+      {"role":"CUSTOMER","term":{"var":"C"}},
+      {"role":"TYPE","term":{"const":"consumer"}}
+    ]}, ...],
+    "stratum": 2,
+    "source_span_text": "Konsument moze odstapic od umowy w terminie 14 dni od doreczenia."
+  }
 
-  Przepis: "Wyjatek: tresc cyfrowa + zgoda + pobieranie."
-  head: {"predicate":"ab_withdraw","args":[
-    {"role":"CUSTOMER","term":{"var":"C"}},
-    {"role":"ORDER","term":{"var":"O"}}
-  ]}
-  body: [{"literal_type":"pos","predicate":"product_type","args":[
-    {"role":"PRODUCT","term":{"var":"P"}},
-    {"role":"TYPE","term":{"const":"digital"}}
-  ]}, ...]
-  stratum: 1
+  {
+    "rule_id": "exceptions.ab_withdraw",
+    "module": "exceptions",
+    "head": {"predicate":"ab_withdraw","args":[
+      {"role":"CUSTOMER","term":{"var":"C"}},
+      {"role":"ORDER","term":{"var":"O"}}
+    ]},
+    "body": [{"literal_type":"pos","predicate":"product_type","args":[
+      {"role":"PRODUCT","term":{"var":"P"}},
+      {"role":"TYPE","term":{"const":"digital"}}
+    ]}, ...],
+    "stratum": 1,
+    "source_span_text": "Prawo odstapienia nie przysluguje dla tresci cyfrowych po rozpoczeciu pobierania, jesli Klient wyrazil zgode."
+  }
 
 Konwencje Clingo:
 - Zmienne: wielkie litery (O, C, D) lub podkreslnik _ (wildcard)
@@ -99,8 +111,13 @@ Role w head/body musza byc nazwane semantycznie (ORDER, CUSTOMER, TYPE, VALUE), 
 Stale w term.const zapisuj w lower_snake_case zgodnym z LP.
 
 ## WAZNE ZASADY
-1. Dla KAZDEGO elementu podaj source_span_text: doslowny, minimalny cytat z regulaminu
-   (jedno zdanie lub klauzula), ktory uzasadnia ten element.
+1. Dla KAZDEGO elementu (entity_type, predicate, cluster, rule) podaj source_span_text:
+   - Wartosc = DOSLOWNY cytat z regulaminu (jedno zdanie lub klauzula) uzasadniajacy dany element.
+   - Kopiuj tekst dosłownie — bez parafrazy, bez skracania semantycznego.
+   - Dla entity_type/cluster: zdanie definiujace role lub wyliczajace wartosci (np. "Dostepne metody platnosci: karta, przelew, BLIK...").
+   - Dla predicate: zdanie opisujace zdarzenie lub stan (np. "Reklamacje rozpatrywane sa w terminie 14 dni...").
+   - Dla rule: DOKLADNIE ten przepis, ktory logicznie uzasadnia regule (jesli regula wynika z jednego zdania, to to zdanie; jesli z klauzuli — klauzula).
+   - Nigdy nie zostawiaj source_span_text jako null ani pustego stringa — jesli element wychodzi z tekstu, musi miec cytat.
 2. Nazwy predykatow i entity_type: UPPER_SNAKE_CASE.
 3. Nazwy klastrow: lower_snake_case.
 4. Nie dodawaj elementow spoza tekstu regulaminu.

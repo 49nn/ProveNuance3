@@ -7,7 +7,7 @@ import psycopg
 
 from data_model.cluster import ClusterStateRow
 from data_model.entity import Entity
-from data_model.fact import Fact
+from data_model.fact import Fact, FactStatus
 from data_model.rule import Rule
 
 from .cluster_repo import load_cluster_states_for_case
@@ -40,7 +40,11 @@ def load_case(
     resolve_case_id_int(conn, case_id)
 
     entities = load_entities_for_case(conn, case_id)
-    facts = load_facts_for_case(conn, case_id)
+    facts = [
+        fact
+        for fact in load_facts_for_case(conn, case_id)
+        if fact.status == FactStatus.observed
+    ]
     rules = load_rules(conn, enabled_only=True)
     states = load_cluster_states_for_case(conn, case_id)
 

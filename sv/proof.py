@@ -347,11 +347,12 @@ def _find_proof_node(
 
 @dataclass
 class ProofStep:
-    step_order:     int
-    rule_id:        str | None
-    rule_text:      str
-    substitution:   dict[str, str]
-    used_fact_ids:  list[str]       # fact_id lub "" dla atomów bez fact_id
+    step_order:       int
+    rule_id:          str | None
+    rule_text:        str
+    substitution:     dict[str, str]
+    used_fact_ids:    list[str]       # fact_id lub "" dla atomów bez fact_id
+    source_span_text: str | None = None   # fragment tekstu źródłowego (regulamin/dokument)
 
 
 @dataclass
@@ -403,11 +404,13 @@ def build_proof_run(
         if node is None:
             continue
         rule_text = ""
+        source_span_text: str | None = None
         if node.rule_id and rules_index:
             r = rules_index.get(node.rule_id)
             if r:
                 from sv.runner import rule_to_lp
                 rule_text = rule_to_lp(r)
+                source_span_text = r.metadata.source_span_text
 
         used_fact_ids = [
             base_atom_to_fact_id.get(a, "") for a in node.pos_used
@@ -421,11 +424,13 @@ def build_proof_run(
             rule_text=rule_text,
             substitution=orig_subst,
             used_fact_ids=used_fact_ids,
+            source_span_text=source_span_text,
         ))
         dag_entries.append({
             "step": i,
             "atom": f"{atom.predicate}({','.join(v for _, v in atom.bindings)})",
             "rule_id": node.rule_id,
+            "source_span_text": source_span_text,
             "depends_on": [
                 f"{a.predicate}({','.join(v for _, v in a.bindings)})"
                 for a in node.pos_used

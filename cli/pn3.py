@@ -126,6 +126,7 @@ def cmd_facts(_args: argparse.Namespace) -> None:
                 ) AS args_list,
                 f.source_id,
                 f.source_extractor,
+                f.source_spans,
                 f.proof_id,
                 (
                     SELECT pr.result
@@ -139,9 +140,11 @@ def cmd_facts(_args: argparse.Namespace) -> None:
                     FROM fact_neural_trace fnt
                     WHERE fnt.fact_id = f.id
                 ) AS n_trace,
-                f.created_at
+                f.created_at,
+                s.content AS source_content
             FROM facts f
             LEFT JOIN cases c ON c.id = f.case_id
+            LEFT JOIN sources s ON s.source_id = f.source_id
             ORDER BY f.id
         """)
         rows = cur.fetchall()
@@ -153,7 +156,8 @@ def cmd_facts(_args: argparse.Namespace) -> None:
 
     for i, (
         case_id, fact_id, predicate, arity, status, truth_val, conf,
-        n_args, args_list, source_id, source_extractor, proof_id, proof_value, n_trace, created_at,
+        n_args, args_list, source_id, source_extractor, source_spans_raw,
+        proof_id, proof_value, n_trace, created_at, source_content,
     ) in enumerate(rows, start=1):
         s_style = _STATUS_STYLE.get(status, "")
         status_text = Text(status, style=s_style)
@@ -174,6 +178,10 @@ def cmd_facts(_args: argparse.Namespace) -> None:
             f"  proof: {proof_value or '-'} proof_id: {proof_id or '-'} "
             f"trace: {n_trace} created_at: {str(created_at)[:19]}"
         )
+        # Pokaż fragment tekstu źródłowego jeśli dostępny
+        span_text = _extract_span_text(source_content, source_spans_raw)
+        if span_text:
+            console.print(f"  [dim]source text:[/dim] [italic]{span_text}[/italic]")
         if i < len(rows):
             console.print()
 
@@ -196,7 +204,8 @@ def cmd_rules(_args: argparse.Namespace) -> None:
                 r.weight,
                 r.precision_est,
                 r.support,
-                r.created_at
+                r.created_at,
+                r.source_span_text
             FROM rules r
             JOIN rule_modules rm ON rm.id = r.module_id
             ORDER BY r.stratum, r.id
@@ -209,7 +218,8 @@ def cmd_rules(_args: argparse.Namespace) -> None:
         return
 
     for i, (
-        rule_id, module, stratum, enabled, learned, weight, precision, support, created_at
+        rule_id, module, stratum, enabled, learned, weight, precision, support, created_at,
+        source_span_text,
     ) in enumerate(rows, start=1):
         header = Text(f"{i}. ", style="dim")
         header.append(rule_id, style="bold yellow")
@@ -225,6 +235,8 @@ def cmd_rules(_args: argparse.Namespace) -> None:
             f"support: {str(support) if support is not None else '-'} "
             f"created_at: {str(created_at)[:19]}"
         )
+        if source_span_text:
+            console.print(f"  [dim]source text:[/dim] [italic]{source_span_text}[/italic]")
         if i < len(rows):
             console.print()
 
@@ -483,6 +495,24 @@ def _coerce_json(value):
         except json.JSONDecodeError:
             return None
     return None
+
+
+def _extract_span_text(content: str | None, spans_raw) -> str | None:
+    """Wyciąga fragment tekstu ze źródła używając pierwszego spanu [{start,end}]."""
+    if not content or not spans_raw:
+        return None
+    spans = spans_raw if isinstance(spans_raw, list) else _coerce_json(spans_raw)
+    if not spans:
+        return None
+    first = spans[0]
+    if not isinstance(first, dict):
+        return None
+    start = first.get("start")
+    end = first.get("end")
+    if start is None or end is None:
+        return None
+    text = content[start:end].strip()
+    return text if text else None
 
 
 def _dot_escape(value: str) -> str:
@@ -856,8 +886,8 @@ def cmd_proof(args: argparse.Namespace) -> None:
             return "-"
         return json.dumps(obj, sort_keys=True, ensure_ascii=False)
 
-    # Best-effort map step -> (atom, status) using (rule_id, substitution).
-    step_atom_index: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    # Best-effort map step -> (atom, status, source_span_text) using (rule_id, substitution).
+    step_atom_index: dict[tuple[str, str], list[tuple[str, str, str | None]]] = {}
     for atom, node in dag_map.items():
         if not isinstance(node, dict):
             continue
@@ -866,7 +896,8 @@ def cmd_proof(args: argparse.Namespace) -> None:
             _sub_key(node.get("substitution")),
         )
         status = str(node.get("status") or "-")
-        step_atom_index.setdefault(key, []).append((str(atom), status))
+        sst = node.get("source_span_text") or None
+        step_atom_index.setdefault(key, []).append((str(atom), status, sst))
 
     console.print("[bold cyan]Proof Run[/bold cyan]")
     console.print(f"proof_id: {run_proof_id}")
@@ -912,13 +943,16 @@ def cmd_proof(args: argparse.Namespace) -> None:
             candidates = step_atom_index.get(step_key, [])
             atom = "-"
             atom_status = "-"
+            source_span_text = None
             if candidates:
-                atom, atom_status = candidates.pop(0)
+                atom, atom_status, source_span_text = candidates.pop(0)
             console.print(
                 f"{step_order}. atom={atom} status={atom_status} rule={rule_id or '-'} "
                 f"sub={sub if sub else '-'} "
                 f"used_facts={used if used else '-'}"
             )
+            if source_span_text:
+                console.print(f"   [dim]source text:[/dim] [italic]{source_span_text}[/italic]")
 
     if args.dag:
         console.print()
@@ -2204,12 +2238,34 @@ def _print_run_case_cluster_states(cluster_states, schemas) -> None:
     console.print(f"[dim]{len(cluster_states)} cluster_state(s)[/dim]")
 
 
-def _ground_atom_to_text(atom) -> str:
+def _ground_atom_to_text(atom, predicate_positions: dict[str, list[str]] | None = None) -> str:
     if atom is None:
         return "-"
     bindings = getattr(atom, "bindings", ()) or ()
-    args = ", ".join(value for _role, value in bindings)
     predicate = str(getattr(atom, "predicate", atom))
+    if not bindings:
+        return predicate
+
+    ordered_values: list[str] = []
+    binding_map = {str(role).upper(): str(value) for role, value in bindings}
+    roles = (predicate_positions or {}).get(predicate.lower(), [])
+    used_roles: set[str] = set()
+
+    for role in roles:
+        role_key = str(role).upper()
+        value = binding_map.get(role_key)
+        if value is None:
+            continue
+        ordered_values.append(value)
+        used_roles.add(role_key)
+
+    for role, value in bindings:
+        role_key = str(role).upper()
+        if role_key in used_roles:
+            continue
+        ordered_values.append(str(value))
+
+    args = ", ".join(ordered_values)
     return f"{predicate}({args})" if args else predicate
 
 
@@ -2252,7 +2308,10 @@ def _load_case_queries_for_case(conn, case_id: str) -> list[tuple[int, str, str 
         ]
 
 
-def _print_run_case_feedback(feedback_items) -> None:
+def _print_run_case_feedback(
+    feedback_items,
+    predicate_positions: dict[str, list[str]] | None = None,
+) -> None:
     console.print()
     console.print("[bold cyan]Verifier Feedback[/bold cyan]")
     if not feedback_items:
@@ -2266,11 +2325,19 @@ def _print_run_case_feedback(feedback_items) -> None:
         header.append("  ")
         header.append(item.predicate, style="cyan")
         console.print(header)
-        console.print("   outcome=", outcome_text, f"  atom={_ground_atom_to_text(item.atom)}")
+        console.print(
+            "   outcome=",
+            outcome_text,
+            f"  atom={_ground_atom_to_text(item.atom, predicate_positions)}",
+        )
         if item.violated_naf:
-            console.print(f"   violated_naf={[_ground_atom_to_text(atom) for atom in item.violated_naf]}")
+            console.print(
+                f"   violated_naf={[_ground_atom_to_text(atom, predicate_positions) for atom in item.violated_naf]}"
+            )
         if item.missing_pos_body:
-            console.print(f"   missing_pos_body={[_ground_atom_to_text(atom) for atom in item.missing_pos_body]}")
+            console.print(
+                f"   missing_pos_body={[_ground_atom_to_text(atom, predicate_positions) for atom in item.missing_pos_body]}"
+            )
         if item.supporting_rule_ids:
             console.print(f"   supporting_rule_ids={list(item.supporting_rule_ids)}")
     console.print(f"[dim]{len(feedback_items)} feedback item(s)[/dim]")
@@ -2328,9 +2395,15 @@ def cmd_run_case(args: argparse.Namespace) -> None:
                 "query": query_text,
                 "expected": expected,
                 "outcome": feedback.outcome,
-                "atom_text": _ground_atom_to_text(feedback.atom),
-                "violated_naf": [_ground_atom_to_text(atom) for atom in feedback.violated_naf],
-                "missing_pos_body": [_ground_atom_to_text(atom) for atom in feedback.missing_pos_body],
+                "atom_text": _ground_atom_to_text(feedback.atom, predicate_positions),
+                "violated_naf": [
+                    _ground_atom_to_text(atom, predicate_positions)
+                    for atom in feedback.violated_naf
+                ],
+                "missing_pos_body": [
+                    _ground_atom_to_text(atom, predicate_positions)
+                    for atom in feedback.missing_pos_body
+                ],
                 "supporting_rule_ids": list(feedback.supporting_rule_ids),
             })
 
@@ -2340,7 +2413,7 @@ def cmd_run_case(args: argparse.Namespace) -> None:
     console.print(result.summary())
     _print_run_case_facts(result.facts)
     _print_run_case_cluster_states(result.cluster_states, schemas)
-    _print_run_case_feedback(result.candidate_feedback)
+    _print_run_case_feedback(result.candidate_feedback, predicate_positions)
     _print_run_case_query_feedback(query_feedback_rows)
 
 

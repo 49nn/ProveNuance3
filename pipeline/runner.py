@@ -130,7 +130,13 @@ class ProposeVerifyRunner:
         graph_builder = GraphBuilder(cluster_schemas)
         memory_encoder = EntityMemoryBiasEncoder(cluster_schemas, config)
 
-        nn_inference = NeuralInference(proposer, graph_builder, memory_encoder, config)
+        nn_inference = NeuralInference(
+            proposer,
+            graph_builder,
+            memory_encoder,
+            config,
+            predicate_positions=predicate_positions,
+        )
         verifier = SymbolicVerifier(
             cluster_schemas,
             predicate_positions=predicate_positions,

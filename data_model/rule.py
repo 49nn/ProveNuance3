@@ -68,6 +68,7 @@ class RuleMetadata(BaseModel):
     precision_est:     Confidence | None                        = None
     last_validated_at: datetime | None                          = None
     constraints:       list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
+    source_span_text:  str | None                               = None
 
 
 # ---------------------------------------------------------------------------
