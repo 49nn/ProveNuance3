@@ -17,7 +17,7 @@ from .cluster_repo import resolve_existing_entity_ids as _resolve_existing_entit
 from .connection import connect as connect_db
 from .entity_repo import link_or_upsert_entity, upsert_entity
 from .fact_repo import attach_proof_run_to_facts, upsert_fact
-from .proof_repo import save_proof_run
+from .proof_repo import save_candidate_feedback, save_proof_run
 from .ontology_repo import save_ontology as _save_ontology
 from .rule_repo import load_rules, upsert_learned_rules
 from .schema_repo import load_cluster_schemas, load_predicate_positions
@@ -87,9 +87,10 @@ class DBSession:
     # Save
     # ------------------------------------------------------------------
 
-    def save_pipeline_result(self, result: "PipelineResult", case_id: str) -> None:
+    def save_pipeline_result(self, result: "PipelineResult", case_id: str) -> str | None:
         case_id_int = resolve_case_id_int(self.conn, case_id)
         known_entities = self._entities_by_case.get(case_id, [])
+        saved_proof_id: str | None = None
 
         with self.conn.transaction():
             for entity in known_entities:
@@ -100,14 +101,25 @@ class DBSession:
 
             upsert_cluster_states(self.conn, result.cluster_states, case_id_int)
 
-            if result.proof_nodes:
+            if result.proof_nodes or result.candidate_feedback:
                 proof_result = "proved" if result.proved else "unknown"
+                if not result.proved and any(
+                    item.outcome in {"blocked", "not_proved"}
+                    for item in result.candidate_feedback
+                ):
+                    proof_result = "not_proved"
                 proof_run_id = save_proof_run(
                     self.conn,
                     proof_nodes=result.proof_nodes,
                     query="pipeline_result",
                     result=proof_result,
                     case_id_int=case_id_int,
+                )
+                saved_proof_id = proof_run_id
+                save_candidate_feedback(
+                    self.conn,
+                    proof_id=proof_run_id,
+                    feedback_items=result.candidate_feedback,
                 )
                 proved_fact_ids = [
                     f.fact_id
@@ -125,6 +137,7 @@ class DBSession:
                     case_id_int=case_id_int,
                 )
         self.conn.commit()
+        return saved_proof_id
 
     def save_extraction_result(
         self,

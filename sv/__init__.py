@@ -17,7 +17,7 @@ Przykład użycia:
 from sv.proof import ProofRun, ProofStep, build_proof_run
 from sv.runner import build_program, rule_to_lp, solve
 from sv.stratification import validate_stratification
-from sv.types import GroundAtom, GroundRule, ProofNode, VerifyResult
+from sv.types import CandidateFeedback, GroundAtom, GroundRule, ProofNode, VerifyResult
 from sv.verifier import SymbolicVerifier
 
 __all__ = [
@@ -25,6 +25,7 @@ __all__ = [
     "SymbolicVerifier",
     # Wyniki
     "VerifyResult",
+    "CandidateFeedback",
     "ProofRun",
     "ProofStep",
     # Typy wewnętrzne (do testów i inspekcji)

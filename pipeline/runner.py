@@ -3,8 +3,9 @@ ProposeVerifyRunner - facade connecting NeuralInference to SymbolicVerifier.
 
 Workflow (single run):
   1. NeuralInference.propose()  -> nn_facts (inferred_candidate), nn_states
-  2. SymbolicVerifier.verify()  -> proved facts, new facts, proof DAG
-  3. Merge into PipelineResult
+  2. SymbolicVerifier.verify()  -> proved facts, new facts, proof DAG, candidate feedback
+  3. Optional refinement round with verifier-fed proved/blocked signals
+  4. Merge into PipelineResult
 """
 from __future__ import annotations
 
@@ -16,7 +17,8 @@ import torch
 log = logging.getLogger(__name__)
 
 from data_model.cluster import ClusterSchema, ClusterStateRow
-from data_model.common import ConstTerm
+from data_model.common import ConstTerm, TruthDistribution
+from data_model.fact import FactStatus
 from data_model.rule import LiteralType
 from nn.config import NNConfig
 from nn.entity_memory import EntityMemoryBiasEncoder
@@ -35,9 +37,17 @@ if TYPE_CHECKING:
     from data_model.rule import Rule
 
 
+_KEEP_INPUT_FACT_STATUSES = {
+    FactStatus.observed,
+    FactStatus.proved,
+    FactStatus.rejected,
+    FactStatus.retracted,
+}
+
+
 class ProposeVerifyRunner:
     """
-    Propose-verify facade: one neural pass followed by symbolic verification.
+    Propose-verify facade with a small verifier-guided refinement loop.
 
     Args:
         nn_inference: constructed NeuralInference (with ready NeuralProposer)
@@ -48,9 +58,11 @@ class ProposeVerifyRunner:
         self,
         nn_inference: NeuralInference,
         verifier: SymbolicVerifier,
+        max_refinement_rounds: int = 2,
     ) -> None:
         self.nn_inference = nn_inference
         self.verifier = verifier
+        self.max_refinement_rounds = max(1, int(max_refinement_rounds))
 
     @classmethod
     def from_schemas(
@@ -58,6 +70,7 @@ class ProposeVerifyRunner:
         cluster_schemas: list[ClusterSchema],
         config: NNConfig | None = None,
         predicate_positions: dict[str, list[str]] | None = None,
+        max_refinement_rounds: int = 2,
     ) -> ProposeVerifyRunner:
         """
         Build runner from cluster schemas (without case data).
@@ -123,7 +136,11 @@ class ProposeVerifyRunner:
             predicate_positions=predicate_positions,
         )
 
-        return cls(nn_inference, verifier)
+        return cls(
+            nn_inference,
+            verifier,
+            max_refinement_rounds=max_refinement_rounds,
+        )
 
     @staticmethod
     def _const_value_in_domain(
@@ -220,6 +237,57 @@ class ProposeVerifyRunner:
                     current = float(module.W_pos[truth_t_idx, dst_idx].item())
                     module.W_pos[truth_t_idx, dst_idx] = max(current, weight)
 
+    @staticmethod
+    def _fact_signature(facts: list[Fact]) -> tuple[tuple[str, str, str], ...]:
+        return tuple(sorted(
+            (fact.fact_id, fact.status.value, fact.truth.value or "")
+            for fact in facts
+        ))
+
+    @staticmethod
+    def _make_blocked_negative_fact(fact: Fact) -> Fact:
+        provenance = None
+        if fact.provenance is not None:
+            provenance = fact.provenance.model_copy(update={"proof_id": None})
+        return fact.model_copy(update={
+            "truth": TruthDistribution(
+                domain=["T", "F", "U"],
+                value="F",
+                confidence=1.0,
+            ),
+            "status": FactStatus.rejected,
+            "provenance": provenance,
+        })
+
+    def _build_refinement_facts(
+        self,
+        base_facts: list[Fact],
+        updated_facts: list[Fact],
+        new_facts: list[Fact],
+        blocked_fact_ids: set[str],
+    ) -> list[Fact]:
+        facts_by_id: dict[str, Fact] = {
+            fact.fact_id: fact
+            for fact in base_facts
+            if fact.status in _KEEP_INPUT_FACT_STATUSES
+        }
+        updated_by_id = {fact.fact_id: fact for fact in updated_facts}
+
+        for fact in updated_facts:
+            if fact.status == FactStatus.proved:
+                facts_by_id[fact.fact_id] = fact
+
+        for fact_id in blocked_fact_ids:
+            blocked_fact = updated_by_id.get(fact_id)
+            if blocked_fact is None:
+                continue
+            facts_by_id[fact_id] = self._make_blocked_negative_fact(blocked_fact)
+
+        for fact in new_facts:
+            facts_by_id[fact.fact_id] = fact
+
+        return list(facts_by_id.values())
+
     def run(
         self,
         entities: list[Entity],
@@ -249,31 +317,72 @@ class ProposeVerifyRunner:
             fact_dim=fact_dim,
         )
         self._apply_learned_rule_weights(rules)
+        current_facts = list(facts)
+        current_states = list(cluster_states)
+        final_states = current_states
+        final_result = None
+        feedback_by_fact_id = {}
+        rounds_run = 0
 
-        # Phase 1: neural propose
-        log.debug(
-            "Faza NN propose: %d encji, %d faktow, %d regul, %d stanow",
-            len(entities), len(facts), len(rules), len(cluster_states),
-        )
-        nn_facts, nn_states = self.nn_inference.propose(
-            entities, facts, rules, cluster_states
-        )
-        log.debug("Faza NN propose: zwrocono %d faktow kandydatow", len(nn_facts))
+        for round_idx in range(self.max_refinement_rounds):
+            rounds_run = round_idx + 1
+            log.debug(
+                "Faza NN propose [round=%d]: %d encji, %d faktow, %d regul, %d stanow",
+                rounds_run, len(entities), len(current_facts), len(rules), len(current_states),
+            )
+            nn_facts, nn_states = self.nn_inference.propose(
+                entities, current_facts, rules, current_states
+            )
+            log.debug(
+                "Faza NN propose [round=%d]: zwrocono %d faktow kandydatow",
+                rounds_run, len(nn_facts),
+            )
 
-        # Phase 2: symbolic verify
-        log.debug("Faza SV verify: start")
-        sv_result = self.verifier.verify(nn_facts, rules, nn_states)
-        log.debug(
-            "Faza SV verify: %d faktow proved, %d nowych faktow",
-            len(sv_result.updated_facts), len(sv_result.new_facts),
-        )
+            log.debug("Faza SV verify [round=%d]: start", rounds_run)
+            sv_result = self.verifier.verify(nn_facts, rules, nn_states)
+            log.debug(
+                "Faza SV verify [round=%d]: %d faktow proved, %d nowych faktow, %d feedback items",
+                rounds_run,
+                len(sv_result.updated_facts),
+                len(sv_result.new_facts),
+                len(sv_result.candidate_feedback),
+            )
 
-        # Merge: updated facts + newly derived facts
-        all_facts = sv_result.updated_facts + sv_result.new_facts
+            for item in sv_result.candidate_feedback:
+                feedback_by_fact_id[item.fact_id] = item
+
+            final_result = sv_result
+            final_states = nn_states
+
+            if rounds_run >= self.max_refinement_rounds:
+                break
+
+            blocked_fact_ids = {
+                item.fact_id
+                for item in sv_result.candidate_feedback
+                if item.outcome == "blocked"
+            }
+            refined_facts = self._build_refinement_facts(
+                base_facts=current_facts,
+                updated_facts=sv_result.updated_facts,
+                new_facts=sv_result.new_facts,
+                blocked_fact_ids=blocked_fact_ids,
+            )
+            if self._fact_signature(refined_facts) == self._fact_signature(current_facts):
+                break
+
+            current_facts = refined_facts
+            current_states = nn_states
+
+        assert final_result is not None
+        all_facts = final_result.updated_facts + final_result.new_facts
 
         return PipelineResult(
             facts=all_facts,
-            cluster_states=nn_states,
-            new_facts=sv_result.new_facts,
-            proof_nodes=dict(sv_result.proof_nodes),
+            cluster_states=final_states,
+            new_facts=final_result.new_facts,
+            proof_nodes=dict(final_result.proof_nodes),
+            derived_atoms=final_result.derived_atoms,
+            candidate_feedback=list(feedback_by_fact_id.values()),
+            rounds=rounds_run,
         )

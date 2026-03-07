@@ -1,14 +1,17 @@
 """
-Persistence helpers for proof_runs and proof_steps.
+Persistence helpers for proof_runs, proof_steps, and verifier feedback.
 """
 from __future__ import annotations
 
 import re
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import psycopg
 from psycopg.types.json import Jsonb
+
+if TYPE_CHECKING:
+    from sv.types import CandidateFeedback
 
 
 def _to_clingo_id(s: str) -> str:
@@ -140,3 +143,50 @@ def save_proof_run(
             )
 
     return proof_id
+
+
+def save_candidate_feedback(
+    conn: psycopg.Connection,
+    proof_id: str,
+    feedback_items: list["CandidateFeedback"],
+) -> None:
+    if not feedback_items:
+        return
+
+    with conn.cursor() as cur:
+        for item in feedback_items:
+            atom_text = _atom_to_str(item.atom) if item.atom is not None else None
+            violated_naf = [_atom_to_str(atom) for atom in item.violated_naf]
+            missing_pos_body = [_atom_to_str(atom) for atom in item.missing_pos_body]
+            cur.execute(
+                """
+                INSERT INTO proof_candidate_feedback (
+                    proof_id,
+                    fact_id,
+                    predicate,
+                    outcome,
+                    atom_text,
+                    violated_naf,
+                    missing_pos_body,
+                    supporting_rule_ids
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (proof_id, fact_id) DO UPDATE
+                SET predicate = EXCLUDED.predicate,
+                    outcome = EXCLUDED.outcome,
+                    atom_text = EXCLUDED.atom_text,
+                    violated_naf = EXCLUDED.violated_naf,
+                    missing_pos_body = EXCLUDED.missing_pos_body,
+                    supporting_rule_ids = EXCLUDED.supporting_rule_ids
+                """,
+                (
+                    proof_id,
+                    item.fact_id,
+                    item.predicate,
+                    item.outcome,
+                    atom_text,
+                    violated_naf,
+                    missing_pos_body,
+                    list(item.supporting_rule_ids),
+                ),
+            )

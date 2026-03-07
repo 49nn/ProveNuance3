@@ -6,6 +6,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -34,6 +35,8 @@ DSN = dict(
     user=os.getenv("PN3_USER", "provenuance"),
     password=os.getenv("PN3_PASSWORD", "provenuance"),
 )
+
+_QUERY_RE = re.compile(r"^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*)\)\s*$")
 
 
 def connect() -> psycopg2.extensions.connection:
@@ -826,6 +829,24 @@ def cmd_proof(args: argparse.Namespace) -> None:
         )
         step_rows = cur.fetchall()
 
+        cur.execute(
+            """
+            SELECT
+                fact_id,
+                predicate,
+                outcome,
+                atom_text,
+                violated_naf,
+                missing_pos_body,
+                supporting_rule_ids
+            FROM proof_candidate_feedback
+            WHERE proof_id = %s
+            ORDER BY id
+            """,
+            (proof_id,),
+        )
+        feedback_rows = cur.fetchall()
+
     dag_obj = _coerce_json(proof_dag)
     dag_map = dag_obj if isinstance(dag_obj, dict) else {}
 
@@ -853,7 +874,7 @@ def cmd_proof(args: argparse.Namespace) -> None:
     console.print(f"query: {query}")
     console.print(f"result: {result}")
     console.print(f"created_at: {str(created_at)[:19]}")
-    console.print(f"steps: {len(step_rows)} linked_facts: {len(fact_rows)}")
+    console.print(f"steps: {len(step_rows)} linked_facts: {len(fact_rows)} feedback: {len(feedback_rows)}")
 
     console.print()
     console.print("[bold cyan]Linked Facts[/bold cyan]")
@@ -863,6 +884,21 @@ def cmd_proof(args: argparse.Namespace) -> None:
         for i, (fact_id, predicate, status) in enumerate(fact_rows, start=1):
             status_text = Text(status, style=_STATUS_STYLE.get(status, ""))
             console.print(f"{i}. {fact_id} {predicate} ", status_text)
+
+    console.print()
+    console.print("[bold cyan]Verifier Feedback[/bold cyan]")
+    if not feedback_rows:
+        console.print("[dim]-[/dim]")
+    else:
+        for i, (fact_id, predicate, outcome, atom_text, violated_naf, missing_pos_body, supporting_rule_ids) in enumerate(feedback_rows, start=1):
+            outcome_text = Text(outcome, style=_FEEDBACK_STYLE_RC.get(outcome, ""))
+            console.print(f"{i}. {fact_id} {predicate} ", outcome_text, f" atom={atom_text or '-'}")
+            if violated_naf:
+                console.print(f"   violated_naf={list(violated_naf)}")
+            if missing_pos_body:
+                console.print(f"   missing_pos_body={list(missing_pos_body)}")
+            if supporting_rule_ids:
+                console.print(f"   supporting_rule_ids={list(supporting_rule_ids)}")
 
     console.print()
     console.print("[bold cyan]Proof Steps[/bold cyan]")
@@ -2119,6 +2155,13 @@ _STATUS_STYLE_RC: dict[str, str] = {
     "retracted":           "dim",
 }
 
+_FEEDBACK_STYLE_RC: dict[str, str] = {
+    "proved": "bold green",
+    "blocked": "bold red",
+    "not_proved": "yellow",
+    "unknown": "dim",
+}
+
 
 def _print_run_case_facts(facts) -> None:
     console.print()
@@ -2161,11 +2204,105 @@ def _print_run_case_cluster_states(cluster_states, schemas) -> None:
     console.print(f"[dim]{len(cluster_states)} cluster_state(s)[/dim]")
 
 
+def _ground_atom_to_text(atom) -> str:
+    if atom is None:
+        return "-"
+    bindings = getattr(atom, "bindings", ()) or ()
+    args = ", ".join(value for _role, value in bindings)
+    predicate = str(getattr(atom, "predicate", atom))
+    return f"{predicate}({args})" if args else predicate
+
+
+def _parse_query_atom(query: str, predicate_positions: dict[str, list[str]] | None = None):
+    from sv._utils import to_clingo_id
+    from sv.types import GroundAtom
+
+    q = query.strip()
+    m = _QUERY_RE.match(q)
+    if not m:
+        return GroundAtom(q.lower(), ())
+    pred = m.group(1).strip().lower()
+    args_raw = [a.strip() for a in m.group(2).split(",") if a.strip()]
+    roles = (predicate_positions or {}).get(pred, [])
+    bindings = tuple(
+        (
+            roles[i].upper() if i < len(roles) else str(i),
+            to_clingo_id(a),
+        )
+        for i, a in enumerate(args_raw)
+    )
+    return GroundAtom(pred, tuple(sorted(bindings)))
+
+
+def _load_case_queries_for_case(conn, case_id: str) -> list[tuple[int, str, str | None]]:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT cq.id, cq.query, cq.expected_result
+            FROM case_queries cq
+            JOIN cases c ON c.id = cq.case_id
+            WHERE c.case_id = %s
+            ORDER BY cq.id
+            """,
+            (case_id,),
+        )
+        return [
+            (int(query_id), str(query_text), str(expected) if expected is not None else None)
+            for query_id, query_text, expected in cur.fetchall()
+        ]
+
+
+def _print_run_case_feedback(feedback_items) -> None:
+    console.print()
+    console.print("[bold cyan]Verifier Feedback[/bold cyan]")
+    if not feedback_items:
+        console.print("[dim]0 feedback item(s)[/dim]")
+        return
+
+    for i, item in enumerate(feedback_items, start=1):
+        outcome_text = Text(item.outcome, style=_FEEDBACK_STYLE_RC.get(item.outcome, ""))
+        header = Text(f"{i}. ", style="dim")
+        header.append(item.fact_id, style="bold yellow")
+        header.append("  ")
+        header.append(item.predicate, style="cyan")
+        console.print(header)
+        console.print("   outcome=", outcome_text, f"  atom={_ground_atom_to_text(item.atom)}")
+        if item.violated_naf:
+            console.print(f"   violated_naf={[_ground_atom_to_text(atom) for atom in item.violated_naf]}")
+        if item.missing_pos_body:
+            console.print(f"   missing_pos_body={[_ground_atom_to_text(atom) for atom in item.missing_pos_body]}")
+        if item.supporting_rule_ids:
+            console.print(f"   supporting_rule_ids={list(item.supporting_rule_ids)}")
+    console.print(f"[dim]{len(feedback_items)} feedback item(s)[/dim]")
+
+
+def _print_run_case_query_feedback(query_feedback_rows) -> None:
+    console.print()
+    console.print("[bold cyan]Query Feedback[/bold cyan]")
+    if not query_feedback_rows:
+        console.print("[dim]0 query/queries[/dim]")
+        return
+
+    for i, row in enumerate(query_feedback_rows, start=1):
+        outcome_text = Text(row["outcome"], style=_FEEDBACK_STYLE_RC.get(row["outcome"], ""))
+        expected = row["expected"] or "-"
+        console.print(f"{i}. qid={row['query_id']} query={row['query']}")
+        console.print("   outcome=", outcome_text, f"  expected={expected}  atom={row['atom_text']}")
+        if row["violated_naf"]:
+            console.print(f"   violated_naf={row['violated_naf']}")
+        if row["missing_pos_body"]:
+            console.print(f"   missing_pos_body={row['missing_pos_body']}")
+        if row["supporting_rule_ids"]:
+            console.print(f"   supporting_rule_ids={row['supporting_rule_ids']}")
+    console.print(f"[dim]{len(query_feedback_rows)} query feedback row(s)[/dim]")
+
+
 def cmd_run_case(args: argparse.Namespace) -> None:
     from db import DBSession
     from pipeline.runner import ProposeVerifyRunner
 
     case_id = args.case_id
+    query_feedback_rows: list[dict[str, object]] = []
     with DBSession.connect() as session:
         schemas = session.load_cluster_schemas()
         predicate_positions = session.load_predicate_positions()
@@ -2176,12 +2313,35 @@ def cmd_run_case(args: argparse.Namespace) -> None:
             predicate_positions=predicate_positions,
         )
         result = runner.run(entities, facts, rules, cluster_states)
-        session.save_pipeline_result(result, case_id=case_id)
+        proof_id = session.save_pipeline_result(result, case_id=case_id)
+        case_queries = _load_case_queries_for_case(session.conn, case_id)
+        for query_id, query_text, expected in case_queries:
+            query_atom = _parse_query_atom(query_text, predicate_positions)
+            feedback = runner.verifier.explain_query_atom(
+                query_atom,
+                derived_atoms=result.derived_atoms,
+                proof_nodes=result.proof_nodes,
+                rules=rules,
+            )
+            query_feedback_rows.append({
+                "query_id": query_id,
+                "query": query_text,
+                "expected": expected,
+                "outcome": feedback.outcome,
+                "atom_text": _ground_atom_to_text(feedback.atom),
+                "violated_naf": [_ground_atom_to_text(atom) for atom in feedback.violated_naf],
+                "missing_pos_body": [_ground_atom_to_text(atom) for atom in feedback.missing_pos_body],
+                "supporting_rule_ids": list(feedback.supporting_rule_ids),
+            })
 
     console.print(f"[bold green]run-case completed[/bold green]: {case_id}")
+    if proof_id:
+        console.print(f"proof_id: {proof_id}")
     console.print(result.summary())
     _print_run_case_facts(result.facts)
     _print_run_case_cluster_states(result.cluster_states, schemas)
+    _print_run_case_feedback(result.candidate_feedback)
+    _print_run_case_query_feedback(query_feedback_rows)
 
 
 def _load_case_ids(selected: list[str] | None) -> list[str]:

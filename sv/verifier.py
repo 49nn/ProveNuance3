@@ -22,7 +22,7 @@ from sv.converter import IdRegistry, cluster_to_lp, fact_to_lp, symbol_to_atom
 from sv.proof import ProofRun, build_proof_run, extract_proof_dag, ground_rule
 from sv.runner import build_program, solve
 from sv.stratification import validate_stratification
-from sv.types import GroundAtom, VerifyResult
+from sv.types import CandidateFeedback, GroundAtom, ProofNode, VerifyResult
 
 
 # Statusy niepodlegające nadpisaniu przez verifier (jak w nn/inference.py)
@@ -148,12 +148,21 @@ class SymbolicVerifier:
             derived - base_atoms, atom_to_fact_id, proof_nodes,
             registry.mapping(), all_positions,
         )
+        candidate_feedback = self._build_candidate_feedback(
+            facts=facts,
+            rules=rules,
+            derived=derived,
+            proof_nodes=proof_nodes,
+            atom_to_fact_id=atom_to_fact_id,
+            all_positions=all_positions,
+        )
 
         return VerifyResult(
             updated_facts=updated_facts,
             new_facts=new_facts,
             derived_atoms=derived,
             proof_nodes=proof_nodes,
+            candidate_feedback=candidate_feedback,
         )
 
     def build_proof_run(
@@ -196,37 +205,167 @@ class SymbolicVerifier:
           - not_proved: istnieją reguły dla celu, ale nie udało się wyprowadzić
           - unknown: brak reguł i brak atomu w modelu
         """
-        model = set(result.derived_atoms)
         all_positions = {**self.predicate_positions, **self._derived_positions(rules)}
-        if query_atom in model:
-            return "proved"
+        return self._classify_ground_atom(
+            query_atom=query_atom,
+            derived=result.derived_atoms,
+            proof_nodes=result.proof_nodes,
+            rules=rules,
+            all_positions=all_positions,
+        ).outcome
 
-        has_rule_for_head = False
-        blocked = False
-        for rule in rules:
-            if rule.head.predicate != query_atom.predicate:
-                continue
-            has_rule_for_head = True
-            for grounded in ground_rule(rule, model, all_positions):
-                if grounded.head != query_atom:
-                    continue
-                if not all(a in model for a in grounded.pos_body):
-                    continue
-                if any(self._naf_violated(naf_atom, result.derived_atoms) for naf_atom in grounded.neg_body):
-                    blocked = True
-                    break
-            if blocked:
-                break
-
-        if blocked:
-            return "blocked"
-        if has_rule_for_head:
-            return "not_proved"
-        return "unknown"
+    def explain_query_atom(
+        self,
+        query_atom: GroundAtom,
+        *,
+        derived_atoms: frozenset[GroundAtom],
+        proof_nodes: dict[GroundAtom, ProofNode],
+        rules: list[Rule],
+    ) -> CandidateFeedback:
+        """
+        Zwraca szczegolowy feedback dla query atom:
+          - outcome
+          - violated_naf
+          - missing_pos_body
+          - supporting_rule_ids
+        """
+        all_positions = {**self.predicate_positions, **self._derived_positions(rules)}
+        return self._classify_ground_atom(
+            query_atom=query_atom,
+            derived=derived_atoms,
+            proof_nodes=proof_nodes,
+            rules=rules,
+            all_positions=all_positions,
+        )
 
     # ------------------------------------------------------------------
     # Prywatne metody pomocnicze
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _dedupe_atoms(atoms: list[GroundAtom]) -> tuple[GroundAtom, ...]:
+        seen: set[GroundAtom] = set()
+        out: list[GroundAtom] = []
+        for atom in atoms:
+            if atom in seen:
+                continue
+            seen.add(atom)
+            out.append(atom)
+        return tuple(out)
+
+    @staticmethod
+    def _dedupe_rule_ids(rule_ids: list[str]) -> tuple[str, ...]:
+        seen: set[str] = set()
+        out: list[str] = []
+        for rule_id in rule_ids:
+            if rule_id in seen:
+                continue
+            seen.add(rule_id)
+            out.append(rule_id)
+        return tuple(out)
+
+    def _classify_ground_atom(
+        self,
+        query_atom: GroundAtom,
+        derived: frozenset[GroundAtom],
+        proof_nodes: dict[GroundAtom, ProofNode],
+        rules: list[Rule],
+        all_positions: dict[str, list[str]],
+    ) -> CandidateFeedback:
+        model = set(derived)
+        if query_atom in model:
+            proof_node = proof_nodes.get(query_atom)
+            supporting_rule_ids = (
+                (proof_node.rule_id,)
+                if proof_node is not None and proof_node.rule_id is not None
+                else ()
+            )
+            return CandidateFeedback(
+                fact_id="",
+                predicate=query_atom.predicate,
+                outcome="proved",
+                atom=query_atom,
+                supporting_rule_ids=supporting_rule_ids,
+            )
+
+        has_rule_for_head = False
+        blocked_atoms: list[GroundAtom] = []
+        missing_atoms: list[GroundAtom] = []
+        supporting_rule_ids: list[str] = []
+
+        for rule in rules:
+            if rule.head.predicate != query_atom.predicate:
+                continue
+            has_rule_for_head = True
+            supporting_rule_ids.append(rule.rule_id)
+            for grounded in ground_rule(rule, model, all_positions):
+                if grounded.head != query_atom:
+                    continue
+                missing = [atom for atom in grounded.pos_body if atom not in model]
+                if missing:
+                    missing_atoms.extend(missing)
+                    continue
+                violated = [
+                    naf_atom
+                    for naf_atom in grounded.neg_body
+                    if self._naf_violated(naf_atom, derived)
+                ]
+                if violated:
+                    blocked_atoms.extend(violated)
+
+        outcome = "unknown"
+        if blocked_atoms:
+            outcome = "blocked"
+        elif has_rule_for_head:
+            outcome = "not_proved"
+
+        return CandidateFeedback(
+            fact_id="",
+            predicate=query_atom.predicate,
+            outcome=outcome,
+            atom=query_atom,
+            violated_naf=self._dedupe_atoms(blocked_atoms),
+            missing_pos_body=self._dedupe_atoms(missing_atoms),
+            supporting_rule_ids=self._dedupe_rule_ids(supporting_rule_ids),
+        )
+
+    def _build_candidate_feedback(
+        self,
+        facts: list[Fact],
+        rules: list[Rule],
+        derived: frozenset[GroundAtom],
+        proof_nodes: dict[GroundAtom, ProofNode],
+        atom_to_fact_id: dict[GroundAtom, str],
+        all_positions: dict[str, list[str]],
+    ) -> list[CandidateFeedback]:
+        fact_id_to_atom: dict[str, GroundAtom] = {fid: atom for atom, fid in atom_to_fact_id.items()}
+        feedback: list[CandidateFeedback] = []
+
+        for fact in facts:
+            if fact.status in _KEEP_STATUS:
+                continue
+
+            atom = fact_id_to_atom.get(fact.fact_id)
+            if atom is None:
+                feedback.append(CandidateFeedback(
+                    fact_id=fact.fact_id,
+                    predicate=fact.predicate.lower(),
+                    outcome="unknown",
+                ))
+                continue
+
+            item = self._classify_ground_atom(
+                query_atom=atom,
+                derived=derived,
+                proof_nodes=proof_nodes,
+                rules=rules,
+                all_positions=all_positions,
+            )
+            item.fact_id = fact.fact_id
+            item.predicate = fact.predicate.lower()
+            feedback.append(item)
+
+        return feedback
 
     def _facts_to_lp(
         self,
