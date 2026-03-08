@@ -23,7 +23,14 @@ from data_model.rule import LiteralType
 from nn.config import NNConfig
 from nn.entity_memory import EntityMemoryBiasEncoder
 from nn.gating import ExceptionGateBank
-from nn.graph_builder import EdgeTypeSpec, GraphBuilder
+from nn.graph_builder import (
+    EdgeTypeSpec,
+    GraphBuilder,
+    find_head_entity_term,
+    get_support_binding_roles,
+    is_supports_relation,
+    supports_relation,
+)
 from nn.inference import NeuralInference
 from nn.message_passing import HeteroMessagePassingBank
 from nn.proposer import NeuralProposer
@@ -109,14 +116,20 @@ class ProposeVerifyRunner:
             if src.name != dst.name and src.entity_type == dst.entity_type
         ]
 
+        cluster_names = {schema.name.lower() for schema in cluster_schemas}
         supports_specs: list[EdgeTypeSpec] = [
             EdgeTypeSpec(
                 src_type="fact",
-                relation="supports",
+                relation=supports_relation(predicate, role),
                 dst_type=f"c_{dst.name}",
                 src_dim=GraphBuilder.FACT_DIM,
                 dst_dim=dst.dim,
             )
+            for predicate, roles in sorted((predicate_positions or {}).items())
+            if predicate.lower() not in cluster_names
+            if not predicate.lower().startswith("_sv_")
+            if not predicate.lower().startswith("ab_")
+            for role in roles
             for dst in cluster_schemas
         ]
 
@@ -194,7 +207,7 @@ class ProposeVerifyRunner:
         with torch.no_grad():
             # 1) Neutralize implies/supports matrices each run to avoid drift across cases.
             for spec in mp_bank.specs:
-                if spec.relation not in {"implies", "supports"}:
+                if spec.relation != "implies" and not is_supports_relation(spec.relation):
                     continue
                 module = mp_bank.get_module(spec)
                 module.W_pos.zero_()
@@ -237,11 +250,26 @@ class ProposeVerifyRunner:
                         module.W_pos[src_idx, dst_idx] = max(current, weight)
                         continue
 
-                    module = module_by_key.get(("fact", "supports", f"c_{dst_schema.name}"))
-                    if module is None:
+                    head_entity_term = find_head_entity_term(
+                        rule.head.args,
+                        dst_schema.resolved_entity_role,
+                    )
+                    support_roles = get_support_binding_roles(lit.args, head_entity_term)
+                    if not support_roles:
                         continue
-                    current = float(module.W_pos[truth_t_idx, dst_idx].item())
-                    module.W_pos[truth_t_idx, dst_idx] = max(current, weight)
+
+                    for support_role in support_roles:
+                        module = module_by_key.get(
+                            (
+                                "fact",
+                                supports_relation(lit.predicate, support_role),
+                                f"c_{dst_schema.name}",
+                            )
+                        )
+                        if module is None:
+                            continue
+                        current = float(module.W_pos[truth_t_idx, dst_idx].item())
+                        module.W_pos[truth_t_idx, dst_idx] = max(current, weight)
 
     @staticmethod
     def _fact_signature(facts: list[Fact]) -> tuple[tuple[str, str, str], ...]:

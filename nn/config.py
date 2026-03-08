@@ -34,6 +34,8 @@ class NNConfig:
     """Porządek wartości T/F/U — indeksy w tensorze logitów faktów."""
 
     # --- Staty uczenia ---
+    lambda_fact_sup: float = 1.0
+    """Waga L_fact_sup dla pseudo/gold superwizji na wezłach faktowych."""
     lambda_imp: float = 0.1
     """Waga L_imp w L = L_mask + λ·L_imp + μ·L_incomp + β·L_sparse."""
     mu_incomp: float = 0.1

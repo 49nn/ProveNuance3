@@ -59,6 +59,43 @@ def l_mask(
     return total
 
 
+def l_fact_supervision(
+    logits_fact: torch.Tensor,
+    data: HeteroData,
+) -> torch.Tensor:
+    """
+    Weighted cross-entropy on fact nodes with explicit supervision targets.
+
+    Expected tensors on data["fact"]:
+      - supervision_target: LongTensor[N_fact], -1 means unlabeled
+      - supervision_weight: FloatTensor[N_fact], optional
+    """
+    if logits_fact.numel() == 0 or "fact" not in data.node_types:
+        return torch.tensor(0.0)
+
+    targets = data["fact"].get("supervision_target")
+    if targets is None or targets.numel() == 0:
+        return torch.tensor(0.0, device=logits_fact.device)
+
+    targets = targets.to(device=logits_fact.device, dtype=torch.long)
+    mask = targets >= 0
+    if not bool(mask.any().item()):
+        return torch.tensor(0.0, device=logits_fact.device)
+
+    log_p = F.log_softmax(logits_fact[mask], dim=-1)
+    selected_targets = targets[mask]
+    losses = -log_p[torch.arange(selected_targets.size(0), device=logits_fact.device), selected_targets]
+
+    weights = data["fact"].get("supervision_weight")
+    if weights is not None and weights.numel() == targets.numel():
+        weights = weights.to(device=logits_fact.device, dtype=torch.float32)[mask]
+        total_weight = float(weights.sum().item())
+        if total_weight > 0.0:
+            return (losses * weights).sum() / weights.sum()
+
+    return losses.mean()
+
+
 def l_implication(
     logits_cluster: dict[str, torch.Tensor],
     config: NNConfig,
@@ -220,14 +257,22 @@ def compute_loss(
     Zwraca (loss_total, dict komponentów straty do logowania).
     """
     lm = l_mask(logits_cluster, masked_items, cluster_schemas)
+    lf = l_fact_supervision(logits_fact, data)
     li = l_implication(logits_cluster, config, node_index, cluster_schemas)
     lc = l_incompatibility(logits_cluster, config, node_index, cluster_schemas)
     ls = l_sparsity(logits_cluster, logits_fact, frozen_cluster, frozen_fact, cluster_schemas)
 
-    total = lm + config.lambda_imp * li + config.mu_incomp * lc + config.beta_sparse * ls
+    total = (
+        lm
+        + config.lambda_fact_sup * lf
+        + config.lambda_imp * li
+        + config.mu_incomp * lc
+        + config.beta_sparse * ls
+    )
 
     components = {
         "L_mask":   float(lm.item()),
+        "L_fact_sup": float(lf.item()),
         "L_imp":    float(li.item()),
         "L_incomp": float(lc.item()),
         "L_sparse": float(ls.item()),

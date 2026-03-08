@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import torch
 from torch_geometric.data import HeteroData
+from data_model.common import ConstTerm, VarTerm
 
 if TYPE_CHECKING:
     from data_model.common import Span
@@ -25,6 +26,52 @@ if TYPE_CHECKING:
     from data_model.rule import Rule
 
 TRUTH_ORDER = ("T", "F", "U")
+SUPPORTS_RELATION_PREFIX = "supports:"
+
+
+def supports_relation(predicate: str, role: str) -> str:
+    return f"{SUPPORTS_RELATION_PREFIX}{predicate.lower()}:{role.upper()}"
+
+
+def parse_supports_relation(relation: str) -> tuple[str, str] | None:
+    if not relation.startswith(SUPPORTS_RELATION_PREFIX):
+        return None
+    payload = relation[len(SUPPORTS_RELATION_PREFIX):]
+    predicate, sep, role = payload.rpartition(":")
+    if not sep or not predicate or not role:
+        return None
+    return predicate.lower(), role.upper()
+
+
+def is_supports_relation(relation: str) -> bool:
+    return relation == "supports" or parse_supports_relation(relation) is not None
+
+
+def same_rule_term(left, right) -> bool:
+    if isinstance(left, VarTerm) and isinstance(right, VarTerm):
+        return left.var == right.var
+    if isinstance(left, ConstTerm) and isinstance(right, ConstTerm):
+        return left.const == right.const
+    return False
+
+
+def find_head_entity_term(rule_head_args, entity_role: str):
+    entity_role_upper = entity_role.upper()
+    for arg in rule_head_args:
+        if arg.role.upper() == entity_role_upper:
+            return arg.term
+    return None
+
+
+def get_support_binding_roles(rule_args, head_entity_term) -> tuple[str, ...]:
+    if head_entity_term is None:
+        return ()
+    roles = [
+        arg.role.upper()
+        for arg in rule_args
+        if same_rule_term(arg.term, head_entity_term)
+    ]
+    return tuple(dict.fromkeys(roles))
 
 
 # ---------------------------------------------------------------------------
@@ -326,7 +373,6 @@ class GraphBuilder:
           - cluster -> cluster: body literal jest klastrem, head jest klastrem
           - fact -> cluster:    body literal jest predykatem faktowym, head jest klastrem
         """
-        from data_model.common import ConstTerm, VarTerm
         from data_model.rule import LiteralType
 
         schema_by_name = {s.name: s for s in self.cluster_schemas}
@@ -393,12 +439,19 @@ class GraphBuilder:
                 dst_map = node_index.cluster_node_to_idx.get(dst_schema.name, {})
                 if not dst_map:
                     continue
+                head_entity_term = find_head_entity_term(
+                    rule.head.args,
+                    dst_schema.resolved_entity_role,
+                )
+                support_roles = get_support_binding_roles(lit.args, head_entity_term)
+                if not support_roles:
+                    continue
 
                 for fact_idx, fact_id in node_index.idx_to_fact_node.items():
                     fact = fact_by_id.get(fact_id)
                     if fact is None:
                         continue
-                    if fact.predicate != lit.predicate:
+                    if fact.predicate.lower() != lit.predicate.lower():
                         continue
 
                     role_map: dict[str, str] = {}
@@ -433,15 +486,10 @@ class GraphBuilder:
                         continue
 
                     target_entity_id: str | None = None
-                    for head_arg in rule.head.args:
-                        if head_arg.role.upper() != dst_schema.resolved_entity_role:
-                            continue
-                        term = head_arg.term
-                        if isinstance(term, VarTerm):
-                            target_entity_id = subst.get(term.var)
-                        elif isinstance(term, ConstTerm):
-                            target_entity_id = term.const
-                        break
+                    if isinstance(head_entity_term, VarTerm):
+                        target_entity_id = subst.get(head_entity_term.var)
+                    elif isinstance(head_entity_term, ConstTerm):
+                        target_entity_id = head_entity_term.const
 
                     if target_entity_id is None:
                         continue
@@ -449,7 +497,14 @@ class GraphBuilder:
                     if dst_idx is None:
                         continue
 
-                    add_edge("fact", "supports", f"c_{dst_schema.name}", fact_idx, dst_idx)
+                    for support_role in support_roles:
+                        add_edge(
+                            "fact",
+                            supports_relation(lit.predicate, support_role),
+                            f"c_{dst_schema.name}",
+                            fact_idx,
+                            dst_idx,
+                        )
 
         specs: list[EdgeTypeSpec] = []
         for (src_type, relation, dst_type), (src_list, dst_list) in edge_bucket.items():

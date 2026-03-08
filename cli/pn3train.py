@@ -13,11 +13,12 @@ from dataclasses import replace
 from pathlib import Path
 
 from rich.console import Console
+from rich.table import Table
 from runtime_env import load_project_env
 
 from data_model.cluster import ClusterSchema, ClusterStateRow
 from data_model.common import Span
-from data_model.fact import Fact
+from data_model.fact import Fact, FactStatus
 from data_model.self_training import (
     CaseSplit,
     PseudoClusterLabel,
@@ -40,6 +41,7 @@ from db.self_training_repo import (
     set_round_status,
     upsert_round,
 )
+from sv.types import CandidateFeedback
 from sv.types import GroundAtom
 
 console = Console()
@@ -465,12 +467,62 @@ def _parse_export_file(path: Path) -> tuple[SelfTrainingRound, list[PseudoFactLa
     return round_info, fact_labels, cluster_labels
 
 
+def _term_preview(term) -> str:
+    var = getattr(term, "var", None)
+    if var is not None:
+        return str(var)
+    const = getattr(term, "const", None)
+    if const is not None:
+        return str(const)
+    return "?"
+
+
+def _literal_preview(literal) -> str:
+    args = ", ".join(
+        f"{arg.role}={_term_preview(arg.term)}"
+        for arg in literal.args
+    )
+    return f"{literal.predicate}({args})"
+
+
+def _rule_preview(rule) -> str:
+    head = _literal_preview(rule.head)
+    if not rule.body:
+        return f"{head}."
+    body = ", ".join(_literal_preview(literal) for literal in rule.body)
+    return f"{head} :- {body}."
+
+
+def _print_extracted_rules_preview(rules, *, title: str, limit: int = 20) -> None:
+    if not rules:
+        console.print("[dim]No extracted rules above current threshold.[/dim]")
+        return
+
+    table = Table(title=title, header_style="bold cyan")
+    table.add_column("weight", justify="right", style="dim")
+    table.add_column("rule_id", style="bold yellow")
+    table.add_column("rule")
+
+    for rule in rules[:limit]:
+        weight = float(rule.metadata.weight or 0.0)
+        table.add_row(
+            f"{weight:.4f}",
+            rule.rule_id,
+            _rule_preview(rule),
+        )
+
+    console.print(table)
+    if len(rules) > limit:
+        console.print(f"[dim]showing {limit}/{len(rules)} extracted rules[/dim]")
+
+
 def _collect_case_pseudo_labels(
     round_id: str,
     case_id: str,
     gold_facts: list[Fact],
     gold_states: list[ClusterStateRow],
     result_facts: list[Fact],
+    candidate_feedback: list[CandidateFeedback],
     result_states: list[ClusterStateRow],
     schemas: list[ClusterSchema],
     fact_conf_threshold: float,
@@ -491,6 +543,8 @@ def _collect_case_pseudo_labels(
         )
 
     pseudo_facts: list[PseudoFactLabel] = []
+    seen_fact_keys: set[str] = set()
+    fact_by_id = {fact.fact_id: fact for fact in result_facts}
     for fact in result_facts:
         confidence = float(fact.truth.confidence if fact.truth.confidence is not None else 0.0)
         if fact.status.value != "proved":
@@ -502,6 +556,33 @@ def _collect_case_pseudo_labels(
         fact_key = _fact_key(fact)
         if fact_key in gold_fact_keys:
             continue
+        seen_fact_keys.add(fact_key)
+        pseudo_facts.append(PseudoFactLabel(
+            round_id=round_id,
+            case_id=case_id,
+            fact_key=fact_key,
+            fact=fact,
+            truth_confidence=confidence,
+            proof_id=fact.provenance.proof_id if fact.provenance is not None else None,
+        ))
+
+    for item in candidate_feedback:
+        if item.outcome != "blocked":
+            continue
+        fact = fact_by_id.get(item.fact_id)
+        if fact is None:
+            continue
+        if fact.status != FactStatus.rejected:
+            continue
+        if (fact.truth.value or "").upper() != "F":
+            continue
+        confidence = float(fact.truth.confidence if fact.truth.confidence is not None else 0.0)
+        if confidence < fact_conf_threshold:
+            continue
+        fact_key = _fact_key(fact)
+        if fact_key in gold_fact_keys or fact_key in seen_fact_keys:
+            continue
+        seen_fact_keys.add(fact_key)
         pseudo_facts.append(PseudoFactLabel(
             round_id=round_id,
             case_id=case_id,
@@ -670,6 +751,43 @@ def _attach_mask_weights(
                 weights[idx] = float(pseudo_cluster_weight)
         if node_type in data.node_types:
             data[node_type].mask_weight = weights
+
+
+def _attach_fact_supervision(
+    data,
+    node_index,
+    facts: list[Fact],
+    pseudo_fact_weight: float,
+) -> None:
+    import torch
+
+    if "fact" not in data.node_types:
+        return
+
+    n_facts = len(node_index.fact_node_to_idx)
+    targets = torch.full((n_facts,), -1, dtype=torch.long)
+    weights = torch.zeros(n_facts, dtype=torch.float32)
+    truth_to_idx = {"T": 0, "F": 1, "U": 2}
+
+    for fact in facts:
+        if fact.status not in {FactStatus.proved, FactStatus.rejected}:
+            continue
+        idx = node_index.fact_node_to_idx.get(fact.fact_id)
+        if idx is None:
+            continue
+        truth_value = (fact.truth.value or "").upper()
+        target_idx = truth_to_idx.get(truth_value)
+        if target_idx is None:
+            continue
+        confidence = float(fact.truth.confidence if fact.truth.confidence is not None else 1.0)
+        targets[idx] = target_idx
+        weights[idx] = float(pseudo_fact_weight) * confidence
+        data["fact"].is_clamped[idx] = False
+        data["fact"].clamp_hard[idx] = False
+        data["fact"].x[idx].zero_()
+
+    data["fact"].supervision_target = targets
+    data["fact"].supervision_weight = weights
 
 
 def cmd_set_split(args: argparse.Namespace) -> None:
@@ -974,6 +1092,7 @@ def cmd_collect_pseudo_labels(args: argparse.Namespace) -> None:
                 gold_facts=facts,
                 gold_states=states,
                 result_facts=result.facts,
+                candidate_feedback=result.candidate_feedback,
                 result_states=result.cluster_states,
                 schemas=schemas,
                 fact_conf_threshold=args.fact_conf_threshold,
@@ -1121,13 +1240,15 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
         ProposerTrainer,
         RuleExtractionConfig,
         extract_rules_from_mp_bank,
+        fact_cluster_rule_signature,
     )
     from nn.clamp import apply_clamp
     from nn.config import NNConfig
-    from nn.graph_builder import EdgeTypeSpec
+    from nn.graph_builder import EdgeTypeSpec, supports_relation
 
     with DBSession.connect() as session:
         schemas = session.load_cluster_schemas()
+        predicate_positions = session.load_predicate_positions()
 
         gold_case_ids: list[str]
         if args.case:
@@ -1159,7 +1280,11 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
             console.print("[bold red]No training cases available.[/bold red]")
             raise SystemExit(1)
 
-        config = replace(NNConfig(), max_epochs=args.epochs)
+        config = replace(
+            NNConfig(),
+            max_epochs=args.epochs,
+            lambda_fact_sup=args.fact_supervision_weight,
+        )
 
         role_specs = [
             EdgeTypeSpec(
@@ -1183,11 +1308,27 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
             for dst in schemas
             if src.name != dst.name and src.entity_type == dst.entity_type
         ]
+        cluster_names = {schema.name.lower() for schema in schemas}
+        supports_specs = [
+            EdgeTypeSpec(
+                src_type="fact",
+                relation=supports_relation(predicate, role),
+                dst_type=f"c_{dst.name}",
+                src_dim=GraphBuilder.FACT_DIM,
+                dst_dim=dst.dim,
+            )
+            for predicate, roles in sorted(predicate_positions.items())
+            if predicate.lower() not in cluster_names
+            if not predicate.lower().startswith("_sv_")
+            if not predicate.lower().startswith("ab_")
+            for role in roles
+            for dst in schemas
+        ]
 
         import torch as _torch
 
         _torch.manual_seed(args.seed)
-        mp_bank = HeteroMessagePassingBank(role_specs + implies_specs)
+        mp_bank = HeteroMessagePassingBank(role_specs + implies_specs + supports_specs)
         gate_bank = ExceptionGateBank(gate_specs=[])
         cluster_type_dims = {schema.name: schema.dim for schema in schemas}
         proposer = NeuralProposer(config, mp_bank, gate_bank, cluster_type_dims)
@@ -1202,6 +1343,7 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
 
         train_cases: list[tuple[object, object]] = []
         active_cluster_pairs: set[tuple[str, str]] = set()
+        active_support_pairs: set[tuple[str, str, str]] = set()
         loaded_case_ids: list[str] = []
 
         for case_id in case_ids:
@@ -1244,8 +1386,15 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
                 pseudo_cluster_keys,
                 args.pseudo_cluster_weight,
             )
+            _attach_fact_supervision(
+                data,
+                node_index,
+                facts,
+                args.pseudo_fact_weight,
+            )
 
             active_cluster_pairs |= _add_template_cluster_edges(data, node_index, schemas)
+            active_support_pairs |= _add_template_fact_cluster_edges(data, node_index, facts, schemas)
 
             memory_biases = memory_encoder.compute_memory_bias(entities, node_index)
             for schema in schemas:
@@ -1286,17 +1435,29 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
                 top_k_per_source_value=args.top_k,
                 rule_id_prefix=args.rule_prefix,
             ),
+            predicate_positions=predicate_positions,
         )
 
         filtered = [
-            rule for rule in extracted
-            if rule.body and (rule.body[0].predicate, rule.head.predicate) in active_cluster_pairs
+            rule
+            for rule in extracted
+            if _keep_active_learned_rule(
+                rule,
+                schemas,
+                active_cluster_pairs,
+                active_support_pairs,
+                fact_cluster_rule_signature,
+            )
         ]
 
         if args.dry_run:
             console.print(
                 f"[bold yellow]learn-rules dry-run[/bold yellow]: "
                 f"cases={len(loaded_case_ids)}, extracted={len(filtered)}"
+            )
+            _print_extracted_rules_preview(
+                filtered,
+                title="Extracted Learned Rules (preview)",
             )
             return
 
@@ -1305,6 +1466,10 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
     console.print(
         f"[bold green]learn-rules completed[/bold green]: "
         f"cases={len(loaded_case_ids)}, saved={len(filtered)}, module={args.module}"
+    )
+    _print_extracted_rules_preview(
+        filtered,
+        title="Extracted Learned Rules",
     )
 
 
@@ -1462,6 +1627,63 @@ def _add_template_cluster_edges(data, node_index, schemas) -> set[tuple[str, str
     return active_pairs
 
 
+def _add_template_fact_cluster_edges(data, node_index, facts, schemas) -> set[tuple[str, str, str]]:
+    import torch
+
+    edge_bucket: dict[tuple[str, str], set[tuple[int, int]]] = {}
+    active_pairs: set[tuple[str, str, str]] = set()
+
+    for fact in facts:
+        fact_idx = node_index.fact_node_to_idx.get(fact.fact_id)
+        if fact_idx is None:
+            continue
+        predicate = fact.predicate.lower()
+        for arg in fact.args:
+            if arg.entity_id is None:
+                continue
+            role = arg.role.upper()
+            entity_id = arg.entity_id
+            for schema in schemas:
+                dst_map = node_index.cluster_node_to_idx.get(schema.name, {})
+                dst_idx = dst_map.get(entity_id)
+                if dst_idx is None:
+                    continue
+                relation = f"supports:{predicate}:{role}"
+                edge_bucket.setdefault((relation, schema.name), set()).add((fact_idx, dst_idx))
+                active_pairs.add((predicate, role, schema.name))
+
+    for (relation, cluster_name), pairs in edge_bucket.items():
+        ordered = sorted(pairs)
+        if not ordered:
+            continue
+        src_idx = [src for src, _ in ordered]
+        dst_idx = [dst for _, dst in ordered]
+        data["fact", relation, f"c_{cluster_name}"].edge_index = torch.tensor(
+            [src_idx, dst_idx],
+            dtype=torch.long,
+        )
+
+    return active_pairs
+
+
+def _keep_active_learned_rule(
+    rule,
+    schemas,
+    active_cluster_pairs,
+    active_support_pairs,
+    fact_cluster_rule_signature,
+) -> bool:
+    if not rule.body:
+        return False
+    schema_names = {schema.name for schema in schemas}
+    body_predicate = rule.body[0].predicate
+    if body_predicate in schema_names:
+        return (body_predicate, rule.head.predicate) in active_cluster_pairs
+
+    signature = fact_cluster_rule_signature(rule, schemas)
+    return signature in active_support_pairs
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="pn3train", description="Self-training CLI for ProveNuance3")
     sub = parser.add_subparsers(dest="command")
@@ -1535,6 +1757,8 @@ def main() -> None:
     cmd.add_argument("--rule-prefix", default="learned.nn")
     cmd.add_argument("--seed", type=int, default=42)
     cmd.add_argument("--pseudo-cluster-weight", type=float, default=0.35)
+    cmd.add_argument("--pseudo-fact-weight", type=float, default=1.0)
+    cmd.add_argument("--fact-supervision-weight", type=float, default=1.0)
     cmd.add_argument("--dry-run", action="store_true")
     cmd.set_defaults(func=cmd_learn_rules)
 

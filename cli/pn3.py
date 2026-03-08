@@ -796,7 +796,7 @@ def _build_case_network_dot(
 
             if relation == "implies":
                 style = 'color="#1F77B4", penwidth=1.7'
-            elif relation == "supports":
+            elif relation == "supports" or relation.startswith("supports:"):
                 style = 'color="#A15C00", style="dashed"'
             else:
                 style = 'color="#3A7A3A"'
@@ -2478,6 +2478,63 @@ def _add_template_cluster_edges(data, node_index, schemas) -> set[tuple[str, str
     return active_pairs
 
 
+def _add_template_fact_cluster_edges(data, node_index, facts, schemas) -> set[tuple[str, str, str]]:
+    import torch
+
+    edge_bucket: dict[tuple[str, str], set[tuple[int, int]]] = {}
+    active_pairs: set[tuple[str, str, str]] = set()
+
+    for fact in facts:
+        fact_idx = node_index.fact_node_to_idx.get(fact.fact_id)
+        if fact_idx is None:
+            continue
+        predicate = fact.predicate.lower()
+        for arg in fact.args:
+            if arg.entity_id is None:
+                continue
+            role = arg.role.upper()
+            entity_id = arg.entity_id
+            for schema in schemas:
+                dst_map = node_index.cluster_node_to_idx.get(schema.name, {})
+                dst_idx = dst_map.get(entity_id)
+                if dst_idx is None:
+                    continue
+                relation = f"supports:{predicate}:{role}"
+                edge_bucket.setdefault((relation, schema.name), set()).add((fact_idx, dst_idx))
+                active_pairs.add((predicate, role, schema.name))
+
+    for (relation, cluster_name), pairs in edge_bucket.items():
+        ordered = sorted(pairs)
+        if not ordered:
+            continue
+        src_idx = [src for src, _ in ordered]
+        dst_idx = [dst for _, dst in ordered]
+        data["fact", relation, f"c_{cluster_name}"].edge_index = torch.tensor(
+            [src_idx, dst_idx],
+            dtype=torch.long,
+        )
+
+    return active_pairs
+
+
+def _keep_active_learned_rule(
+    rule,
+    schemas,
+    active_cluster_pairs,
+    active_support_pairs,
+    fact_cluster_rule_signature,
+) -> bool:
+    if not rule.body:
+        return False
+    schema_names = {schema.name for schema in schemas}
+    body_predicate = rule.body[0].predicate
+    if body_predicate in schema_names:
+        return (body_predicate, rule.head.predicate) in active_cluster_pairs
+
+    signature = fact_cluster_rule_signature(rule, schemas)
+    return signature in active_support_pairs
+
+
 def cmd_learn_rules(args: argparse.Namespace) -> None:
     from db import DBSession
     from nn import (
@@ -2489,10 +2546,11 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
         ProposerTrainer,
         RuleExtractionConfig,
         extract_rules_from_mp_bank,
+        fact_cluster_rule_signature,
     )
     from nn.clamp import apply_clamp
     from nn.config import NNConfig
-    from nn.graph_builder import EdgeTypeSpec
+    from nn.graph_builder import EdgeTypeSpec, supports_relation
 
     case_ids = _load_case_ids(args.case)
     if not case_ids:
@@ -2503,6 +2561,7 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
 
     with DBSession.connect() as session:
         schemas = session.load_cluster_schemas()
+        predicate_positions = session.load_predicate_positions()
 
         role_specs = [
             EdgeTypeSpec(
@@ -2527,11 +2586,27 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
             for dst in schemas
             if src.name != dst.name and src.entity_type == dst.entity_type
         ]
+        cluster_names = {schema.name.lower() for schema in schemas}
+        supports_specs = [
+            EdgeTypeSpec(
+                src_type="fact",
+                relation=supports_relation(predicate, role),
+                dst_type=f"c_{dst.name}",
+                src_dim=GraphBuilder.FACT_DIM,
+                dst_dim=dst.dim,
+            )
+            for predicate, roles in sorted(predicate_positions.items())
+            if predicate.lower() not in cluster_names
+            if not predicate.lower().startswith("_sv_")
+            if not predicate.lower().startswith("ab_")
+            for role in roles
+            for dst in schemas
+        ]
 
         import torch as _torch
         _torch.manual_seed(args.seed)
 
-        mp_bank = HeteroMessagePassingBank(role_specs + implies_specs)
+        mp_bank = HeteroMessagePassingBank(role_specs + implies_specs + supports_specs)
         gate_bank = ExceptionGateBank(gate_specs=[])
         cluster_type_dims = {s.name: s.dim for s in schemas}
         proposer = NeuralProposer(config, mp_bank, gate_bank, cluster_type_dims)
@@ -2547,6 +2622,7 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
 
         train_cases: list[tuple[object, object]] = []
         active_cluster_pairs: set[tuple[str, str]] = set()
+        active_support_pairs: set[tuple[str, str, str]] = set()
         loaded_case_ids: list[str] = []
 
         for case_id in case_ids:
@@ -2565,6 +2641,7 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
             )
 
             active_cluster_pairs |= _add_template_cluster_edges(data, node_index, schemas)
+            active_support_pairs |= _add_template_fact_cluster_edges(data, node_index, facts, schemas)
 
             memory_biases = memory_encoder.compute_memory_bias(entities, node_index)
             for schema in schemas:
@@ -2605,11 +2682,19 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
                 top_k_per_source_value=args.top_k,
                 rule_id_prefix=args.rule_prefix,
             ),
+            predicate_positions=predicate_positions,
         )
 
         filtered = [
-            r for r in extracted
-            if r.body and (r.body[0].predicate, r.head.predicate) in active_cluster_pairs
+            rule
+            for rule in extracted
+            if _keep_active_learned_rule(
+                rule,
+                schemas,
+                active_cluster_pairs,
+                active_support_pairs,
+                fact_cluster_rule_signature,
+            )
         ]
 
         if args.dry_run:
