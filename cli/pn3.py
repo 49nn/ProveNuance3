@@ -1647,6 +1647,23 @@ def _assert_extraction_runtime_ready(
         )
 
 
+def _run_case_runtime_issue(
+    cluster_schemas: list,
+    predicate_positions: dict[str, list[str]],
+    rules: list,
+) -> str | None:
+    if not cluster_schemas:
+        return "Brak aktywnej ontologii. Najpierw uruchom gen-ontology."
+    if not predicate_positions:
+        return "Aktywna ontologia nie zawiera predykatów. Uruchom gen-ontology ponownie."
+    if not rules:
+        return (
+            "Aktywna ontologia nie zawiera aktywnych reguł. "
+            "Uruchom gen-ontology ponownie albo załaduj reguły do tabeli rules."
+        )
+    return None
+
+
 def _extract_once(
     cluster_schemas: list,
     predicate_positions: dict[str, list[str]],
@@ -2200,6 +2217,24 @@ _FEEDBACK_STYLE_RC: dict[str, str] = {
 }
 
 
+def _print_run_case_temporal_violations(new_facts) -> None:
+    violations = [f for f in new_facts if f.predicate.lower() == "temporal_violation"]
+    if not violations:
+        return
+    console.print()
+    console.print("[bold red]Temporal Violations[/bold red]")
+    for v in violations:
+        # args: [NAME (literal_value), KEY (entity_id)]
+        parts = [
+            a.entity_id if a.entity_id is not None else (a.literal_value or "?")
+            for a in v.args
+        ]
+        name = parts[0] if parts else "?"
+        key = parts[1] if len(parts) > 1 else "?"
+        console.print(f"  [bold red]VIOLATION[/bold red]  [bold]{name}[/bold]  key={key}")
+    console.print(f"[dim]{len(violations)} temporal violation(s)[/dim]")
+
+
 def _print_run_case_facts(facts) -> None:
     console.print()
     console.print("[bold cyan]Facts[/bold cyan]")
@@ -2378,6 +2413,10 @@ def cmd_run_case(args: argparse.Namespace) -> None:
         schemas = session.load_cluster_schemas()
         predicate_positions = session.load_predicate_positions()
         entities, facts, rules, cluster_states = session.load_case(case_id)
+        runtime_issue = _run_case_runtime_issue(schemas, predicate_positions, rules)
+        if runtime_issue is not None:
+            console.print(f"[bold red]{runtime_issue}[/bold red]")
+            raise SystemExit(1)
 
         temporal_constraints = get_temporal_constraints(predicate_positions)
         runner = ProposeVerifyRunner.from_schemas(
@@ -2417,6 +2456,7 @@ def cmd_run_case(args: argparse.Namespace) -> None:
     if proof_id:
         console.print(f"proof_id: {proof_id}")
     console.print(result.summary())
+    _print_run_case_temporal_violations(result.new_facts)
     _print_run_case_facts(result.facts)
     _print_run_case_cluster_states(result.cluster_states, schemas)
     _print_run_case_feedback(result.candidate_feedback, predicate_positions)
@@ -3071,6 +3111,13 @@ def cmd_gen_ontology(args: argparse.Namespace) -> None:
         )
         _print_ontology_tables(result)
         return
+
+    if not result.rules:
+        console.print(
+            "[bold red]gen-ontology aborted:[/bold red] 0 poprawnych reguł po walidacji. "
+            "Aktywna ontologia nie została nadpisana."
+        )
+        raise SystemExit(1)
 
     with DBSession.connect() as session:
         session.save_ontology(result)

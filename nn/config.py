@@ -61,3 +61,13 @@ class NNConfig:
         default_factory=tuple
     )
     """p(A=a) · p(B=b) ≈ 0 — penalizowane przez L_incomp."""
+
+    # --- SV feedback supervision ---
+    gamma_sv_feedback: float = 0.5
+    """Waga L_sv_feedback (SV outcome → supervised signal na logitach faktów)."""
+    sv_blocked_weight: float = 1.0
+    """Per-item waga dla outcome='blocked' (penalizuje logit T)."""
+    sv_proved_weight: float = 0.8
+    """Per-item waga dla outcome='proved' (nagradza logit T)."""
+    sv_feedback_in_training: bool = True
+    """Czy uruchamiać SV inline w train_on_case do generowania l_sv_feedback."""

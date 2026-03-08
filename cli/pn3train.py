@@ -1239,6 +1239,8 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
         NeuralProposer,
         ProposerTrainer,
         RuleExtractionConfig,
+        SVFeedbackProvider,
+        TrainingCase,
         extract_rules_from_mp_bank,
         fact_cluster_rule_signature,
     )
@@ -1334,21 +1336,36 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
         proposer = NeuralProposer(config, mp_bank, gate_bank, cluster_type_dims)
         graph_builder = GraphBuilder(schemas)
         memory_encoder = EntityMemoryBiasEncoder(schemas, config)
+        from pipeline.temporal_config import get_temporal_constraints
+        from sv import SymbolicVerifier
+
+        temporal_constraints = get_temporal_constraints(predicate_positions)
+        _verifier = SymbolicVerifier(
+            cluster_schemas=schemas,
+            predicate_positions=predicate_positions,
+            temporal_constraints=temporal_constraints,
+        )
+
+        def _sv_provider(facts, rules, cluster_states):
+            result = _verifier.verify(facts, rules, cluster_states)
+            return result.candidate_feedback
+
         trainer = ProposerTrainer(
             proposer=proposer,
             cluster_schemas=schemas,
             config=config,
             seed=args.seed,
+            sv_provider=_sv_provider if config.sv_feedback_in_training else None,
         )
 
-        train_cases: list[tuple[object, object]] = []
+        train_cases: list[TrainingCase] = []
         active_cluster_pairs: set[tuple[str, str]] = set()
         active_support_pairs: set[tuple[str, str, str]] = set()
         loaded_case_ids: list[str] = []
 
         for case_id in case_ids:
             try:
-                entities, facts, _rules, states = session.load_case(case_id)
+                entities, facts, rules, states = session.load_case(case_id)
             except ValueError:
                 console.print(f"[yellow]Skipping missing case[/yellow]: {case_id}")
                 continue
@@ -1409,7 +1426,13 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
                 logits_out, _ = apply_clamp(x, is_clamped, clamp_hard, config)
                 data[node_type].x = logits_out
 
-            train_cases.append((data, node_index))
+            train_cases.append(TrainingCase(
+                data=data,
+                node_index=node_index,
+                facts=facts,
+                rules=rules,
+                cluster_states=states,
+            ))
             loaded_case_ids.append(case_id)
 
         if not train_cases:

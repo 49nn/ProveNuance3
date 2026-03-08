@@ -36,7 +36,7 @@ from .rule_extractor import (
     fact_cluster_rule_signature,
 )
 from .trace import NeuralTracer
-from .trainer import ProposerTrainer
+from .trainer import ProposerTrainer, SVFeedbackProvider, TrainingCase
 
 __all__ = [
     # Konfiguracja
@@ -66,4 +66,6 @@ __all__ = [
     # Pipeline
     "NeuralInference",
     "ProposerTrainer",
+    "SVFeedbackProvider",
+    "TrainingCase",
 ]

@@ -1,12 +1,13 @@
 """
 Funkcja straty:
 
-    L = L_mask + λ · L_imp + μ · L_incomp + β · L_sparse
+    L = L_mask + λ · L_imp + μ · L_incomp + β · L_sparse + γ · L_sv_feedback
 
-L_mask   — rekonstrukcja maskowanych obserwacji (self-supervised)
-L_imp    — soft constraint implikacyjny: p(A=a) ≤ p(B=b)
-L_incomp — soft constraint niekompatybilności: p(A=a)·p(B=b) ≈ 0
-L_sparse — entropia / sparsity dla nieuchwyconych węzłów
+L_mask        — rekonstrukcja maskowanych obserwacji (self-supervised)
+L_imp         — soft constraint implikacyjny: p(A=a) ≤ p(B=b)
+L_incomp      — soft constraint niekompatybilności: p(A=a)·p(B=b) ≈ 0
+L_sparse      — entropia / sparsity dla nieuchwyconych węzłów
+L_sv_feedback — SV outcome jako pseudo-supervision: blocked→F, proved→T
 
 Wszystkie funkcje przyjmują tensory i są w pełni różniczkowalne przez PyTorch.
 """
@@ -238,6 +239,51 @@ def l_sparsity(
     return torch.stack(terms).mean()
 
 
+def l_sv_feedback(
+    logits_fact: torch.Tensor,  # [N_fact, 3] — w grafie obliczeniowym
+    feedback_items: list,        # list[CandidateFeedback] — TYPE_CHECKING import tylko
+    node_index: GraphNodeIndex,
+    config: NNConfig,
+) -> torch.Tensor:
+    """
+    L_sv_feedback = Σ_i w_i · (-log p_i(target_i)) / Σ w_i
+
+    Dla każdego CandidateFeedback:
+      - outcome='blocked' → target=F (idx=1), weight=sv_blocked_weight
+      - outcome='proved'  → target=T (idx=0), weight=sv_proved_weight
+      - pozostałe         → pomijane
+
+    Gradient płynie przez logits_fact (ciągłe), mimo że targety
+    pochodzą z dyskretnych decyzji SV.
+    """
+    if logits_fact.numel() == 0 or not feedback_items:
+        return torch.tensor(0.0)
+
+    terms: list[torch.Tensor] = []
+    total_weight = 0.0
+
+    for item in feedback_items:
+        if item.outcome == "blocked":
+            target_idx, weight = 1, config.sv_blocked_weight   # F=1
+        elif item.outcome == "proved":
+            target_idx, weight = 0, config.sv_proved_weight    # T=0
+        else:
+            continue
+
+        idx = node_index.fact_node_to_idx.get(item.fact_id)
+        if idx is None or idx >= logits_fact.size(0):
+            continue
+
+        log_p = F.log_softmax(logits_fact[idx], dim=-1)
+        terms.append(weight * (-log_p[target_idx]))
+        total_weight += weight
+
+    if not terms:
+        return torch.tensor(0.0, device=logits_fact.device)
+
+    return torch.stack(terms).sum() / max(total_weight, 1e-9)
+
+
 # ---------------------------------------------------------------------------
 # Kompozytowa funkcja straty
 # ---------------------------------------------------------------------------
@@ -252,6 +298,7 @@ def compute_loss(
     masked_items: list[tuple[str, int, int, float]],  # (cluster_name, node_idx, true_domain_idx, weight)
     frozen_cluster: dict[str, torch.BoolTensor],
     frozen_fact: torch.BoolTensor,
+    sv_feedback: list | None = None,  # list[CandidateFeedback] | None
 ) -> tuple[torch.Tensor, dict[str, float]]:
     """
     Zwraca (loss_total, dict komponentów straty do logowania).
@@ -261,6 +308,7 @@ def compute_loss(
     li = l_implication(logits_cluster, config, node_index, cluster_schemas)
     lc = l_incompatibility(logits_cluster, config, node_index, cluster_schemas)
     ls = l_sparsity(logits_cluster, logits_fact, frozen_cluster, frozen_fact, cluster_schemas)
+    lsv = l_sv_feedback(logits_fact, sv_feedback or [], node_index, config)
 
     total = (
         lm
@@ -268,14 +316,16 @@ def compute_loss(
         + config.lambda_imp * li
         + config.mu_incomp * lc
         + config.beta_sparse * ls
+        + config.gamma_sv_feedback * lsv
     )
 
     components = {
-        "L_mask":   float(lm.item()),
-        "L_fact_sup": float(lf.item()),
-        "L_imp":    float(li.item()),
-        "L_incomp": float(lc.item()),
-        "L_sparse": float(ls.item()),
-        "L_total":  float(total.item()),
+        "L_mask":        float(lm.item()),
+        "L_fact_sup":    float(lf.item()),
+        "L_imp":         float(li.item()),
+        "L_incomp":      float(lc.item()),
+        "L_sparse":      float(ls.item()),
+        "L_sv_feedback": float(lsv.item()),
+        "L_total":       float(total.item()),
     }
     return total, components

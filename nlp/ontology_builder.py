@@ -264,14 +264,39 @@ def parse_ontology_response(data: dict[str, Any], source_id: str) -> OntologyRes
             source_span_text=_opt_str(c, "source_span_text"),
         ))
 
+    raw_rules = data.get("rules", [])
     rules: list[RuleSpec] = []
+    skipped_rule_errors: list[str] = []
     seen_rid: set[str] = set()
-    for r in data.get("rules", []):
+    for idx, r in enumerate(raw_rules, start=1):
+        if not isinstance(r, dict):
+            skipped_rule_errors.append(
+                f"REGULA #{idx}: niepoprawny format - oczekiwano obiektu JSON."
+            )
+            continue
         rule_id = str(r.get("rule_id", "")).strip()
         module = str(r.get("module", "unknown")).strip().lower()
         head = _normalize_rule_head(r.get("head"))
         body = _normalize_rule_body(r.get("body"))
-        if not rule_id or head is None or body is None or rule_id in seen_rid:
+        if not rule_id:
+            skipped_rule_errors.append(
+                f"REGULA #{idx}: brak rule_id."
+            )
+            continue
+        if head is None:
+            skipped_rule_errors.append(
+                f"REGULA {rule_id}: niepoprawna lub pusta glowa reguly."
+            )
+            continue
+        if body is None:
+            skipped_rule_errors.append(
+                f"REGULA {rule_id}: niepoprawne cialo reguly."
+            )
+            continue
+        if rule_id in seen_rid:
+            skipped_rule_errors.append(
+                f"REGULA {rule_id}: zduplikowany rule_id."
+            )
             continue
         seen_rid.add(rule_id)
         clingo_text = str(r.get("clingo_text", "")).strip() or head_body_to_clingo(head, body)
@@ -286,6 +311,12 @@ def parse_ontology_response(data: dict[str, Any], source_id: str) -> OntologyRes
         ))
 
     rules, validation_errors = _validate_rules(rules, predicates)
+    validation_errors = skipped_rule_errors + validation_errors
+    if not rules:
+        validation_errors.append(
+            "Brak poprawnych regul w odpowiedzi. Zwroc co najmniej jedna regula Horn/NAF "
+            "dla skutkow prawnych wynikajacych z regulaminu."
+        )
 
     return OntologyResult(
         entity_types=entity_types,
@@ -375,15 +406,17 @@ def build_ontology_correction_prompt(
     Buduje prompt korekcyjny dla LLM gdy walidator odrzucil niepoprawne reguly.
     """
     error_block = "\n".join(f"  - {e}" for e in errors)
+    base_prompt = build_ontology_prompt(original_text)
     return (
-        "Poprzednia odpowiedz zawierala niepoprawne reguly, ktore zostaly odrzucone:\n"
+        "Poprzednia odpowiedz zawierala niepoprawne lub brakujace reguly:\n"
         f"{error_block}\n\n"
-        "Popraw ontologie eliminujac powyzsze bledy:\n"
+        "Zwroc pelna ontologie jeszcze raz, zachowujac wszystkie ponizsze zasady.\n"
+        "Dodatkowe wymagania korekcyjne:\n"
         "- Kazda regula z niezdefiniowanym predykatem glowy: dodaj predykat do sekcji predicates\n"
         "- Kazda regula z niezgodna arnoscia: wyrownaj liczbe argumentow glowy do liczby rol predykatu\n"
-        "- Kazda regula z unsafe variables: usun zmienna z glowy lub dodaj literaly wiazace do body\n\n"
-        "Nie zmieniaj poprawnych elementow ontologii. Zwroc pelna poprawiona ontologie.\n\n"
-        f"Oryginalny regulamin:\n{original_text}"
+        "- Kazda regula z unsafe variables: usun zmienna z glowy lub dodaj literaly wiazace do body\n"
+        "- Nie zwracaj pustej listy rules; oczekiwana jest co najmniej jedna poprawna regula\n\n"
+        f"{base_prompt}"
     )
 
 
