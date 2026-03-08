@@ -22,6 +22,7 @@ def get_extractor(
     config=None,
     year: int | None = None,
     predicate_positions: dict[str, list[str]] | None = None,
+    temporal_constraints: list | None = None,
 ) -> "LLMExtractor":
     """
     Return the only supported extractor backend: LLMExtractor.
@@ -42,7 +43,7 @@ def get_extractor(
         raise ValueError("Only backend='llm' is supported.")
 
     from .llm_extractor import LLMExtractor
-    return LLMExtractor(cluster_schemas, ext_cfg, resolved_year, predicate_positions)
+    return LLMExtractor(cluster_schemas, ext_cfg, resolved_year, predicate_positions, temporal_constraints)
 
 
 __all__ = [

@@ -12,7 +12,10 @@ Przepływ:
 """
 from __future__ import annotations
 
+import re
 import uuid
+
+_WINDOW_PRED_RE = re.compile(r"^within_\d+_days_after$")
 
 from data_model.cluster import ClusterSchema, ClusterStateRow
 from data_model.common import RoleArg, TruthDistribution
@@ -22,6 +25,16 @@ from sv.converter import IdRegistry, cluster_to_lp, fact_to_lp, symbol_to_atom
 from sv.proof import ProofRun, build_proof_run, extract_proof_dag, ground_rule
 from sv.runner import build_program, solve
 from sv.stratification import validate_stratification
+from sv.temporal import (
+    AnyTemporalConstraint,
+    TEMPORAL_HELPER_POSITIONS,
+    TEMPORAL_HELPER_PREDICATES,
+    TemporalConstraint,
+    TemporalCoincidenceConstraint,
+    TemporalWindowConstraint,
+    temporal_constraints_to_rules,
+    window_predicate_name,
+)
 from sv.types import CandidateFeedback, GroundAtom, ProofNode, VerifyResult
 
 
@@ -51,6 +64,7 @@ class SymbolicVerifier:
         predicate_positions: dict[str, list[str]] | None = None,
         cluster_roles: dict[str, tuple[str, str]] | None = None,
         truth_threshold: float = 0.5,
+        temporal_constraints: list[AnyTemporalConstraint] | None = None,
     ) -> None:
         self.cluster_schemas = {s.name: s for s in cluster_schemas}
         if not predicate_positions:
@@ -69,6 +83,7 @@ class SymbolicVerifier:
                 for name, roles in cluster_roles.items()
             })
         self.truth_threshold = truth_threshold
+        self.temporal_constraints: list[AnyTemporalConstraint] = temporal_constraints or []
 
     # ------------------------------------------------------------------
     # Publiczne API
@@ -104,11 +119,33 @@ class SymbolicVerifier:
         """
         registry = IdRegistry()
 
-        # Połączone mapowanie ról: bazowe + derywowane z głów reguł
-        all_positions = {**self.predicate_positions, **self._derived_positions(rules)}
+        # Temporal constraint rules — konwertowane do Rule obiektów i dołączane do reguł.
+        tc_rules = temporal_constraints_to_rules(self.temporal_constraints, self.predicate_positions)
+        all_rules = list(rules) + tc_rules
+
+        # Zbieramy wszystkie N z window constraints — potrzebne do generacji computed facts.
+        window_n_days: frozenset[int] = frozenset(
+            tc.n_days
+            for tc in self.temporal_constraints
+            if isinstance(tc, TemporalWindowConstraint)
+        )
+
+        # Pozycje ról dla predykatów window: within_{N}_days_after → ["FROM", "TO"].
+        window_positions: dict[str, list[str]] = {
+            window_predicate_name(n): ["FROM", "TO"]
+            for n in window_n_days
+        }
+
+        # Połączone mapowanie ról: bazowe + derywowane z głów reguł + pomocnicze temporalne.
+        all_positions = {
+            **self.predicate_positions,
+            **self._derived_positions(all_rules),
+            **TEMPORAL_HELPER_POSITIONS,   # before, same_day/week/month/year
+            **window_positions,            # within_{N}_days_after
+        }
 
         # 0. Fail-fast: negacja musi być stratyfikowana.
-        validate_stratification(rules)
+        validate_stratification(all_rules)
 
         # 1. Konwersja do LP strings (all_positions dla observed/proved/inferred_candidate)
         fact_lp_list, atom_to_fact_id = self._facts_to_lp(facts, registry, all_positions)
@@ -122,7 +159,7 @@ class SymbolicVerifier:
         }
 
         # 3. Clingo → model stabilny
-        program = build_program(rules, base_lp)
+        program = build_program(all_rules, base_lp, window_n_days)
         symbols = solve(program)
 
         # 4. Symbol → GroundAtom (używamy rozszerzonego all_positions)
@@ -135,7 +172,7 @@ class SymbolicVerifier:
         proof_nodes = extract_proof_dag(
             set(derived),
             base_atoms,
-            rules,
+            all_rules,
             registry.mapping(),
             all_positions,
         )
@@ -150,7 +187,7 @@ class SymbolicVerifier:
         )
         candidate_feedback = self._build_candidate_feedback(
             facts=facts,
-            rules=rules,
+            rules=all_rules,
             derived=derived,
             proof_nodes=proof_nodes,
             atom_to_fact_id=atom_to_fact_id,
@@ -525,7 +562,9 @@ class SymbolicVerifier:
             "prepaid", "returned_or_proof", "responded_in_14_days",
             "paid_within_48h", "coupon_not_expired", "meets_min_basket",
             "within_14_days", "order_mentioned",
+            *TEMPORAL_HELPER_PREDICATES,  # before, same_day/week/month/year
         }
+
 
         new_facts: list[Fact] = []
 
@@ -535,6 +574,8 @@ class SymbolicVerifier:
             if any(atom.predicate.startswith(p) for p in _SKIP_PREFIXES):
                 continue
             if atom.predicate in _SKIP_EXACT:
+                continue
+            if _WINDOW_PRED_RE.match(atom.predicate):
                 continue
 
             node = proof_nodes.get(atom)

@@ -34,6 +34,7 @@ from nn.graph_builder import (
 from nn.inference import NeuralInference
 from nn.message_passing import HeteroMessagePassingBank
 from nn.proposer import NeuralProposer
+from sv.temporal import AnyTemporalConstraint
 from sv.verifier import SymbolicVerifier
 
 from .result import PipelineResult
@@ -78,6 +79,7 @@ class ProposeVerifyRunner:
         config: NNConfig | None = None,
         predicate_positions: dict[str, list[str]] | None = None,
         max_refinement_rounds: int = 2,
+        temporal_constraints: list[AnyTemporalConstraint] | None = None,
     ) -> ProposeVerifyRunner:
         """
         Build runner from cluster schemas (without case data).
@@ -153,6 +155,7 @@ class ProposeVerifyRunner:
         verifier = SymbolicVerifier(
             cluster_schemas,
             predicate_positions=predicate_positions,
+            temporal_constraints=temporal_constraints,
         )
 
         return cls(

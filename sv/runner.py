@@ -139,7 +139,10 @@ def _parse_date_token(token: str) -> date | None:
         return None
 
 
-def _extract_computed_facts(base_lp_facts: list[str]) -> list[str]:
+def _extract_computed_facts(
+    base_lp_facts: list[str],
+    window_n_days: frozenset[int] = frozenset(),
+) -> list[str]:
     """
     Build helper facts required by rules:
       - within_14_days(DS, DD)
@@ -171,6 +174,51 @@ def _extract_computed_facts(base_lp_facts: list[str]) -> list[str]:
             derived.add(f"within_14_days({from_token},{to_token}).")
             if delta > 0:
                 derived.add(f"within_14_days({to_token},{from_token}).")
+
+    # before(D1, D2) — relacja ścisła: D1 < D2 (ten sam dzień NIE jest before).
+    # Używana przez TemporalConstraint do detekcji naruszeń kolejności zdarzeń.
+    for index, (tok_a, date_a) in enumerate(sorted_dates):
+        for tok_b, date_b in sorted_dates[index + 1:]:
+            if date_b > date_a:
+                derived.add(f"before({tok_a},{tok_b}).")
+
+    # within_N_days_after(DA, DB) — DB jest w oknie [DA, DA+N] (kierunkowe, DA <= DB <= DA+N).
+    # Generowane tylko dla N wymaganych przez aktywne TemporalWindowConstraint.
+    for n in window_n_days:
+        for index, (tok_a, date_a) in enumerate(sorted_dates):
+            derived.add(f"within_{n}_days_after({tok_a},{tok_a}).")  # zwrotne: delta=0
+            for tok_b, date_b in sorted_dates[index + 1:]:
+                delta = (date_b - date_a).days
+                if delta <= n:
+                    derived.add(f"within_{n}_days_after({tok_a},{tok_b}).")
+                else:
+                    break  # sorted — dalsze daty mają delta > n
+
+    # same_day / same_week / same_month / same_year — relacje symetryczne i zwrotne.
+    # Używane przez TemporalCoincidenceConstraint.
+    # Zwrotne: same_X(D, D) dla każdego tokena.
+    for tok, _ in sorted_dates:
+        derived.add(f"same_day({tok},{tok}).")
+        derived.add(f"same_week({tok},{tok}).")
+        derived.add(f"same_month({tok},{tok}).")
+        derived.add(f"same_year({tok},{tok}).")
+    # Krzyżowe: same_X(D1, D2) gdy oba tokeny należą do tego samego okresu.
+    for index, (tok_a, date_a) in enumerate(sorted_dates):
+        for tok_b, date_b in sorted_dates[index + 1:]:
+            if date_a.year == date_b.year:
+                derived.add(f"same_year({tok_a},{tok_b}).")
+                derived.add(f"same_year({tok_b},{tok_a}).")
+                if date_a.month == date_b.month:
+                    derived.add(f"same_month({tok_a},{tok_b}).")
+                    derived.add(f"same_month({tok_b},{tok_a}).")
+                    if date_a == date_b:
+                        # Różne tokeny, ten sam dzień — skrajnie rzadkie w praktyce.
+                        derived.add(f"same_day({tok_a},{tok_b}).")
+                        derived.add(f"same_day({tok_b},{tok_a}).")
+            # same_week: ISO week może przekraczać granicę roku.
+            if date_a.isocalendar()[:2] == date_b.isocalendar()[:2]:
+                derived.add(f"same_week({tok_a},{tok_b}).")
+                derived.add(f"same_week({tok_b},{tok_a}).")
 
     for order_args in by_pred.get("order_placed", []):
         if len(order_args) < 3:
@@ -220,11 +268,13 @@ def _extract_computed_facts(base_lp_facts: list[str]) -> list[str]:
 def build_program(
     rules: list[Rule],
     base_lp_facts: list[str],
+    window_n_days: frozenset[int] = frozenset(),
 ) -> str:
     """
     Assemble a full LP program from base facts, helper facts, domain facts, and rules.
+    window_n_days: zbiór N dla których generowane są within_N_days_after computed facts.
     """
-    all_facts = sorted(set(base_lp_facts) | set(_extract_computed_facts(base_lp_facts)))
+    all_facts = sorted(set(base_lp_facts) | set(_extract_computed_facts(base_lp_facts, window_n_days)))
 
     lines: list[str] = list(all_facts)
     lines += _domain_facts(all_facts)

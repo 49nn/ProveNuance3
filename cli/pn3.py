@@ -1858,6 +1858,7 @@ def cmd_extract_json(args: argparse.Namespace) -> None:
 def cmd_verify_json(args: argparse.Namespace) -> None:
     from db import DBSession
     from nlp.result import ExtractionResult
+    from pipeline.temporal_config import get_temporal_constraints
     from sv import SymbolicVerifier
 
     try:
@@ -1873,9 +1874,11 @@ def cmd_verify_json(args: argparse.Namespace) -> None:
             schemas = session.load_cluster_schemas()
             predicate_positions = session.load_predicate_positions()
 
+        temporal_constraints = get_temporal_constraints(predicate_positions)
         verifier = SymbolicVerifier(
             cluster_schemas=schemas,
             predicate_positions=predicate_positions,
+            temporal_constraints=temporal_constraints,
         )
         verify_result = verifier.verify(
             facts=result.facts,
@@ -2367,6 +2370,7 @@ def _print_run_case_query_feedback(query_feedback_rows) -> None:
 def cmd_run_case(args: argparse.Namespace) -> None:
     from db import DBSession
     from pipeline.runner import ProposeVerifyRunner
+    from pipeline.temporal_config import get_temporal_constraints
 
     case_id = args.case_id
     query_feedback_rows: list[dict[str, object]] = []
@@ -2375,9 +2379,11 @@ def cmd_run_case(args: argparse.Namespace) -> None:
         predicate_positions = session.load_predicate_positions()
         entities, facts, rules, cluster_states = session.load_case(case_id)
 
+        temporal_constraints = get_temporal_constraints(predicate_positions)
         runner = ProposeVerifyRunner.from_schemas(
             schemas,
             predicate_positions=predicate_positions,
+            temporal_constraints=temporal_constraints,
         )
         result = runner.run(entities, facts, rules, cluster_states)
         proof_id = session.save_pipeline_result(result, case_id=case_id)

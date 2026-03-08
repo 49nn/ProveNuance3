@@ -44,6 +44,7 @@ class LLMExtractor:
         config: Any,  # ExtractorConfig — import lazy by uniknąć cyklicznych importów
         year: int = 2026,
         predicate_positions: dict[str, list[str]] | None = None,
+        temporal_constraints: list | None = None,
     ) -> None:
         try:
             from google import genai
@@ -80,6 +81,8 @@ class LLMExtractor:
         self._config = config
         self._year = year
 
+        self._temporal_constraints = temporal_constraints or []
+
         # SymbolicVerifier (opcjonalny) — lazy import by nie wymagać clingo gdy sv_verification=False
         self._sv = None
         if config.sv_verification:
@@ -88,6 +91,7 @@ class LLMExtractor:
                 self._sv = SymbolicVerifier(
                     cluster_schemas=cluster_schemas,
                     predicate_positions=self._predicate_positions,
+                    temporal_constraints=self._temporal_constraints,
                 )
             except ImportError:
                 pass  # clingo niedostępne — pomijamy SV walidację

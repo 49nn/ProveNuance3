@@ -17,12 +17,25 @@ Przykład użycia:
 from sv.proof import ProofRun, ProofStep, build_proof_run
 from sv.runner import build_program, rule_to_lp, solve
 from sv.stratification import validate_stratification
+from sv.temporal import (
+    AnyTemporalConstraint,
+    TemporalConstraint,
+    TemporalCoincidenceConstraint,
+    TemporalWindowConstraint,
+    temporal_constraints_to_rules,
+)
 from sv.types import CandidateFeedback, GroundAtom, GroundRule, ProofNode, VerifyResult
 from sv.verifier import SymbolicVerifier
 
 __all__ = [
     # Fasada
     "SymbolicVerifier",
+    # Constraints temporalne
+    "TemporalConstraint",
+    "TemporalCoincidenceConstraint",
+    "TemporalWindowConstraint",
+    "AnyTemporalConstraint",
+    "temporal_constraints_to_rules",
     # Wyniki
     "VerifyResult",
     "CandidateFeedback",
