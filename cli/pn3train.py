@@ -634,6 +634,20 @@ def _collect_case_pseudo_labels(
     return pseudo_facts, pseudo_clusters
 
 
+def _pseudo_fact_label_stats(labels: list[PseudoFactLabel]) -> dict[str, int]:
+    counts = {"total": 0, "t": 0, "f": 0, "u": 0}
+    for label in labels:
+        counts["total"] += 1
+        value = (label.fact.truth.value or "U").upper()
+        if value == "T":
+            counts["t"] += 1
+        elif value == "F":
+            counts["f"] += 1
+        else:
+            counts["u"] += 1
+    return counts
+
+
 def _merge_pseudo_overlay(
     conn,
     case_id: str,
@@ -788,6 +802,37 @@ def _attach_fact_supervision(
 
     data["fact"].supervision_target = targets
     data["fact"].supervision_weight = weights
+
+
+def _fact_supervision_stats(data) -> dict[str, float]:
+    if "fact" not in data.node_types:
+        return {"labeled": 0.0, "t": 0.0, "f": 0.0, "u": 0.0, "weight_sum": 0.0}
+
+    targets = data["fact"].get("supervision_target")
+    weights = data["fact"].get("supervision_weight")
+    if targets is None or targets.numel() == 0:
+        return {"labeled": 0.0, "t": 0.0, "f": 0.0, "u": 0.0, "weight_sum": 0.0}
+
+    labeled = 0
+    counts = {0: 0, 1: 0, 2: 0}
+    weight_sum = 0.0
+
+    weight_list = weights.tolist() if weights is not None and weights.numel() == targets.numel() else None
+    for idx, target in enumerate(targets.tolist()):
+        if target < 0:
+            continue
+        labeled += 1
+        counts[target] = counts.get(target, 0) + 1
+        if weight_list is not None:
+            weight_sum += float(weight_list[idx])
+
+    return {
+        "labeled": float(labeled),
+        "t": float(counts.get(0, 0)),
+        "f": float(counts.get(1, 0)),
+        "u": float(counts.get(2, 0)),
+        "weight_sum": float(weight_sum),
+    }
 
 
 def cmd_set_split(args: argparse.Namespace) -> None:
@@ -1040,6 +1085,8 @@ def cmd_draft_case_queries(args: argparse.Namespace) -> None:
 
 def cmd_collect_pseudo_labels(args: argparse.Namespace) -> None:
     from db import DBSession
+    from nn.config import NNConfig
+    from pipeline.temporal_config import get_temporal_constraints
     from pipeline.runner import ProposeVerifyRunner
 
     round_info = SelfTrainingRound(
@@ -1058,9 +1105,15 @@ def cmd_collect_pseudo_labels(args: argparse.Namespace) -> None:
         upsert_round(session.conn, round_info)
         schemas = session.load_cluster_schemas()
         predicate_positions = session.load_predicate_positions()
+        temporal_constraints = get_temporal_constraints(predicate_positions)
         runner = ProposeVerifyRunner.from_schemas(
             schemas,
+            config=replace(
+                NNConfig(),
+                candidate_fact_threshold=args.candidate_fact_threshold,
+            ),
             predicate_positions=predicate_positions,
+            temporal_constraints=temporal_constraints,
         )
 
         case_ids = list(dict.fromkeys(args.case or list_case_ids_by_split(session.conn, args.split)))
@@ -1101,9 +1154,12 @@ def cmd_collect_pseudo_labels(args: argparse.Namespace) -> None:
             )
             fact_labels.extend(case_fact_labels)
             cluster_labels.extend(case_cluster_labels)
+            case_fact_stats = _pseudo_fact_label_stats(case_fact_labels)
             console.print(
                 f"  [cyan]collected[/cyan] {case_id}: "
-                f"facts={len(case_fact_labels)} clusters={len(case_cluster_labels)}"
+                f"facts={len(case_fact_labels)} "
+                f"(T={case_fact_stats['t']} F={case_fact_stats['f']} U={case_fact_stats['u']}) "
+                f"clusters={len(case_cluster_labels)}"
             )
 
         if not args.dry_run:
@@ -1120,6 +1176,12 @@ def cmd_collect_pseudo_labels(args: argparse.Namespace) -> None:
     lines.extend(_serialize_cluster_label(label) for label in cluster_labels)
     output_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
 
+    fact_stats = _pseudo_fact_label_stats(fact_labels)
+    console.print(
+        "[dim]pseudo facts[/dim] "
+        f"total={fact_stats['total']} "
+        f"(T={fact_stats['t']} F={fact_stats['f']} U={fact_stats['u']})"
+    )
     console.print(
         f"[bold green]collect-pseudo-labels completed[/bold green]: "
         f"round={args.round_id}, facts={len(fact_labels)}, clusters={len(cluster_labels)}, "
@@ -1362,10 +1424,19 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
         active_cluster_pairs: set[tuple[str, str]] = set()
         active_support_pairs: set[tuple[str, str, str]] = set()
         loaded_case_ids: list[str] = []
+        fact_sup_labeled = 0.0
+        fact_sup_t = 0.0
+        fact_sup_f = 0.0
+        fact_sup_u = 0.0
+        fact_sup_weight_sum = 0.0
+        fact_sup_cases = 0
 
         for case_id in case_ids:
             try:
-                entities, facts, rules, states = session.load_case(case_id)
+                entities, facts, rules, states = session.load_case(
+                    case_id,
+                    include_non_observed=True,
+                )
             except ValueError:
                 console.print(f"[yellow]Skipping missing case[/yellow]: {case_id}")
                 continue
@@ -1409,6 +1480,14 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
                 facts,
                 args.pseudo_fact_weight,
             )
+            fact_stats = _fact_supervision_stats(data)
+            fact_sup_labeled += fact_stats["labeled"]
+            fact_sup_t += fact_stats["t"]
+            fact_sup_f += fact_stats["f"]
+            fact_sup_u += fact_stats["u"]
+            fact_sup_weight_sum += fact_stats["weight_sum"]
+            if fact_stats["labeled"] > 0:
+                fact_sup_cases += 1
 
             active_cluster_pairs |= _add_template_cluster_edges(data, node_index, schemas)
             active_support_pairs |= _add_template_fact_cluster_edges(data, node_index, facts, schemas)
@@ -1439,16 +1518,31 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
             console.print("[bold red]No training cases available after overlay.[/bold red]")
             raise SystemExit(1)
 
-        step_count = 0
+        console.print(
+            "[dim]fact supervision[/dim] "
+            f"labeled={int(fact_sup_labeled)} "
+            f"(T={int(fact_sup_t)} F={int(fact_sup_f)} U={int(fact_sup_u)}) "
+            f"cases={fact_sup_cases}/{len(train_cases)} "
+            f"weight_sum={fact_sup_weight_sum:.2f}"
+        )
+
+        epoch_metrics: list[dict[str, float]] = []
         for metrics in trainer.train_epochs(train_cases):
-            step_count += 1
-            if step_count % len(train_cases) == 0:
+            epoch_metrics.append(metrics)
+            if len(epoch_metrics) == len(train_cases):
                 epoch = int(metrics.get("epoch", 0))
-                total = float(metrics.get("L_total", 0.0))
+                total = sum(float(item.get("L_total", 0.0)) for item in epoch_metrics) / len(epoch_metrics)
+                l_mask = sum(float(item.get("L_mask", 0.0)) for item in epoch_metrics) / len(epoch_metrics)
+                l_fact = sum(float(item.get("L_fact_sup", 0.0)) for item in epoch_metrics) / len(epoch_metrics)
+                l_sv = sum(float(item.get("L_sv_feedback", 0.0)) for item in epoch_metrics) / len(epoch_metrics)
                 console.print(
                     f"[dim]epoch {epoch + 1}/{args.epochs}[/dim] "
-                    f"L_total={total:.4f}"
+                    f"L_total={total:.4f} "
+                    f"L_mask={l_mask:.4f} "
+                    f"L_fact_sup={l_fact:.4f} "
+                    f"L_sv_feedback={l_sv:.4f}"
                 )
+                epoch_metrics = []
 
         extracted = extract_rules_from_mp_bank(
             mp_bank=proposer.mp_bank,
@@ -1752,6 +1846,12 @@ def main() -> None:
     cmd.add_argument("--case", action="append", help="Explicit case ID (repeatable)")
     cmd.add_argument("--parent-round", default=None, help="Parent round ID")
     cmd.add_argument("--teacher-module", default="learned_nn", help="Teacher rule module label")
+    cmd.add_argument(
+        "--candidate-fact-threshold",
+        type=float,
+        default=0.55,
+        help="Teacher NN top-1 threshold for proposing candidate facts before verifier blocking",
+    )
     cmd.add_argument("--fact-conf-threshold", type=float, default=0.95)
     cmd.add_argument("--cluster-top1-threshold", type=float, default=0.95)
     cmd.add_argument("--cluster-margin-threshold", type=float, default=0.80)

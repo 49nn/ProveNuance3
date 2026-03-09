@@ -8,7 +8,7 @@ pytest.importorskip("torch_geometric")
 import torch
 from torch_geometric.data import HeteroData
 
-from cli.pn3train import _attach_fact_supervision, _collect_case_pseudo_labels
+from cli.pn3train import _attach_fact_supervision, _collect_case_pseudo_labels, _fact_supervision_stats
 from data_model.common import RoleArg, TruthDistribution
 from data_model.fact import Fact, FactStatus
 from nn.graph_builder import GraphNodeIndex
@@ -132,3 +132,20 @@ def test_attach_fact_supervision_marks_targets_for_pseudo_facts() -> None:
     assert data["fact"].supervision_weight.tolist() == pytest.approx([0.45, 0.5])
     assert data["fact"].is_clamped.tolist() == [False, False]
     assert data["fact"].clamp_hard.tolist() == [False, False]
+
+
+def test_fact_supervision_stats_reports_counts_and_weights() -> None:
+    data = HeteroData()
+    data["fact"].x = torch.zeros(3, 3)
+    data["fact"].supervision_target = torch.tensor([0, 1, -1], dtype=torch.long)
+    data["fact"].supervision_weight = torch.tensor([0.45, 0.5, 0.0], dtype=torch.float32)
+
+    stats = _fact_supervision_stats(data)
+
+    assert stats == pytest.approx({
+        "labeled": 2.0,
+        "t": 1.0,
+        "f": 1.0,
+        "u": 0.0,
+        "weight_sum": 0.95,
+    })

@@ -35,16 +35,20 @@ def resolve_case_id_int(conn: psycopg.Connection, case_id: str) -> int:
 def load_case(
     conn: psycopg.Connection,
     case_id: str,
+    *,
+    include_non_observed: bool = False,
 ) -> tuple[list[Entity], list[Fact], list[Rule], list[ClusterStateRow]]:
     # Validate case_id first to fail fast with a clear message.
     resolve_case_id_int(conn, case_id)
 
     entities = load_entities_for_case(conn, case_id)
-    facts = [
-        fact
-        for fact in load_facts_for_case(conn, case_id)
-        if fact.status == FactStatus.observed
-    ]
+    facts = load_facts_for_case(conn, case_id)
+    if not include_non_observed:
+        facts = [
+            fact
+            for fact in facts
+            if fact.status == FactStatus.observed
+        ]
     rules = load_rules(conn, enabled_only=True)
     states = load_cluster_states_for_case(conn, case_id)
 

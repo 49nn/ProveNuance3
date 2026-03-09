@@ -2235,7 +2235,7 @@ def _print_run_case_temporal_violations(new_facts) -> None:
     console.print(f"[dim]{len(violations)} temporal violation(s)[/dim]")
 
 
-def _print_run_case_facts(facts) -> None:
+def _print_run_case_facts(facts, proof_nodes: dict | None = None) -> None:
     console.print()
     console.print("[bold cyan]Facts[/bold cyan]")
     for i, f in enumerate(facts, start=1):
@@ -2253,6 +2253,36 @@ def _print_run_case_facts(facts) -> None:
         header.append(f"({args_str})")
         console.print(header)
         console.print(f"   status=", status_text, f"  truth={truth_val} ({conf})")
+        # --- provenance ---
+        prov = f.provenance
+        src = f.source
+        if src is not None:
+            extractor_info = f" via {src.extractor}" if src.extractor else ""
+            console.print(f"   [dim]source: {src.source_id}{extractor_info}[/dim]")
+        if prov is not None and prov.proof_id:
+            # Look up pos_used atoms from proof DAG if available
+            pos_atoms_str = ""
+            if proof_nodes:
+                for atom, node in proof_nodes.items():
+                    if node.rule_id == prov.proof_id and node.pos_used:
+                        pos_atoms_str = "  from: " + ", ".join(
+                            str(a.predicate) for a in node.pos_used
+                        )
+                        break
+            console.print(f"   [dim]proof: rule={prov.proof_id}{pos_atoms_str}[/dim]")
+        if prov is not None and prov.neural_trace:
+            # Show top 2 contributors by abs(delta_logits T - delta_logits F)
+            def _trace_score(item) -> float:
+                dl = item.delta_logits
+                return abs(dl.get("T", 0.0) - dl.get("F", 0.0))
+            top = sorted(prov.neural_trace, key=_trace_score, reverse=True)[:2]
+            parts = []
+            for item in top:
+                src_label = item.from_cluster_id or item.from_fact_id or "?"
+                dt = item.delta_logits.get("T", 0.0)
+                df = item.delta_logits.get("F", 0.0)
+                parts.append(f"{src_label} ΔT={dt:+.2f}/ΔF={df:+.2f} (step {item.step})")
+            console.print(f"   [dim]neural: {'; '.join(parts)}[/dim]")
     console.print(f"[dim]{len(facts)} fact(s)[/dim]")
 
 
@@ -2457,7 +2487,7 @@ def cmd_run_case(args: argparse.Namespace) -> None:
         console.print(f"proof_id: {proof_id}")
     console.print(result.summary())
     _print_run_case_temporal_violations(result.new_facts)
-    _print_run_case_facts(result.facts)
+    _print_run_case_facts(result.facts, proof_nodes=result.proof_nodes)
     _print_run_case_cluster_states(result.cluster_states, schemas)
     _print_run_case_feedback(result.candidate_feedback, predicate_positions)
     _print_run_case_query_feedback(query_feedback_rows)
@@ -2581,6 +2611,95 @@ def _keep_active_learned_rule(
     return signature in active_support_pairs
 
 
+def cmd_run_all(args: argparse.Namespace) -> None:
+    """
+    Uruchamia pipeline dla wszystkich (lub wybranych) spraw, wyświetlając
+    jedną linię per case. Na końcu podsumowanie zbiorcze.
+    """
+    import time
+    from db import DBSession
+    from pipeline.runner import ProposeVerifyRunner
+    from pipeline.temporal_config import get_temporal_constraints
+
+    with DBSession.connect() as session:
+        schemas = session.load_cluster_schemas()
+        predicate_positions = session.load_predicate_positions()
+        rules_global = session.load_rules()
+        runtime_issue = _run_case_runtime_issue(schemas, predicate_positions, rules_global)
+        if runtime_issue is not None:
+            console.print(f"[bold red]{runtime_issue}[/bold red]")
+            raise SystemExit(1)
+
+        temporal_constraints = get_temporal_constraints(predicate_positions)
+        runner = ProposeVerifyRunner.from_schemas(
+            schemas,
+            predicate_positions=predicate_positions,
+            temporal_constraints=temporal_constraints,
+        )
+
+        if args.case:
+            case_ids = list(args.case)
+        else:
+            with session.conn.cursor() as cur:
+                cur.execute("SELECT case_id FROM cases ORDER BY id")
+                case_ids = [str(r[0]) for r in cur.fetchall()]
+
+        total = len(case_ids)
+        ok = err = skipped = 0
+        violations_total = 0
+        t0_all = time.monotonic()
+
+        console.print(f"[bold]run-all[/bold]: {total} spraw\n")
+
+        for i, case_id in enumerate(case_ids, 1):
+            t0 = time.monotonic()
+            try:
+                entities, facts, rules, cluster_states = session.load_case(case_id)
+                if not facts:
+                    console.print(
+                        f"[dim]{i:>4}/{total}[/dim]  [yellow]{case_id:<12}[/yellow]  brak faktów — pominięto"
+                    )
+                    skipped += 1
+                    continue
+
+                result = runner.run(entities, facts, rules, cluster_states)
+                session.save_pipeline_result(result, case_id=case_id)
+
+                elapsed = time.monotonic() - t0
+                n_proved = len(result.proved)
+                n_new = len(result.new_facts)
+                n_blocked = sum(1 for fb in result.candidate_feedback if fb.outcome == "blocked")
+                n_violations = sum(
+                    1 for f in result.facts
+                    if f.predicate.lower() == "temporal_violation"
+                )
+                violations_total += n_violations
+
+                viol_tag = f"  [bold red]TEMPORAL×{n_violations}[/bold red]" if n_violations else ""
+                blocked_tag = f"  [red]blocked={n_blocked}[/red]" if n_blocked else ""
+                console.print(
+                    f"[dim]{i:>4}/{total}[/dim]  [bold green]{case_id:<12}[/bold green]"
+                    f"  proved={n_proved}  new={n_new}{blocked_tag}{viol_tag}"
+                    f"  rounds={result.rounds}  [dim]{elapsed:.1f}s[/dim]"
+                )
+                ok += 1
+
+            except Exception as exc:  # noqa: BLE001
+                elapsed = time.monotonic() - t0
+                console.print(
+                    f"[dim]{i:>4}/{total}[/dim]  [bold red]{case_id:<12}[/bold red]"
+                    f"  [red]ERROR: {exc}[/red]  [dim]{elapsed:.1f}s[/dim]"
+                )
+                err += 1
+
+        elapsed_all = time.monotonic() - t0_all
+        console.print(
+            f"\n[bold]Gotowe[/bold]: {ok} OK  {skipped} pominięto  {err} błędów"
+            f"  temporal_violations={violations_total}"
+            f"  [dim]łącznie {elapsed_all:.1f}s[/dim]"
+        )
+
+
 def cmd_learn_rules(args: argparse.Namespace) -> None:
     from db import DBSession
     from nn import (
@@ -2673,7 +2792,10 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
 
         for case_id in case_ids:
             try:
-                entities, facts, _rules, states = session.load_case(case_id)
+                entities, facts, _rules, states = session.load_case(
+                    case_id,
+                    include_non_observed=True,
+                )
             except ValueError:
                 console.print(f"[yellow]Skipping missing case[/yellow]: {case_id}")
                 continue
@@ -2709,16 +2831,23 @@ def cmd_learn_rules(args: argparse.Namespace) -> None:
             console.print("[bold red]No training cases available.[/bold red]")
             return
 
-        step_count = 0
+        epoch_metrics: list[dict[str, float]] = []
         for metrics in trainer.train_epochs(train_cases):
-            step_count += 1
-            if step_count % len(train_cases) == 0:
+            epoch_metrics.append(metrics)
+            if len(epoch_metrics) == len(train_cases):
                 epoch = int(metrics.get("epoch", 0))
-                total = float(metrics.get("L_total", 0.0))
+                total = sum(float(item.get("L_total", 0.0)) for item in epoch_metrics) / len(epoch_metrics)
+                l_mask = sum(float(item.get("L_mask", 0.0)) for item in epoch_metrics) / len(epoch_metrics)
+                l_fact = sum(float(item.get("L_fact_sup", 0.0)) for item in epoch_metrics) / len(epoch_metrics)
+                l_sv = sum(float(item.get("L_sv_feedback", 0.0)) for item in epoch_metrics) / len(epoch_metrics)
                 console.print(
                     f"[dim]epoch {epoch + 1}/{args.epochs}[/dim] "
-                    f"L_total={total:.4f}"
+                    f"L_total={total:.4f} "
+                    f"L_mask={l_mask:.4f} "
+                    f"L_fact_sup={l_fact:.4f} "
+                    f"L_sv_feedback={l_sv:.4f}"
                 )
+                epoch_metrics = []
 
         extracted = extract_rules_from_mp_bank(
             mp_bank=proposer.mp_bank,
@@ -2816,7 +2945,9 @@ def _load_proof_run_from_db(conn, case_id: str, proof_id: str | None):
                 FROM proof_runs pr
                 JOIN cases c ON c.id = pr.case_id
                 WHERE c.case_id = %s
-                ORDER BY pr.id DESC
+                ORDER BY
+                    CASE pr.result WHEN 'proved' THEN 0 WHEN 'not_proved' THEN 1 ELSE 2 END,
+                    pr.id DESC
                 LIMIT 1
                 """,
                 (case_id,),
@@ -3237,6 +3368,7 @@ _COMMANDS = {
     "ingest-text":   (cmd_ingest_text,   "Extract facts from text and save to DB for a given case_id"),
     "ingest-folder": (cmd_ingest_folder, "Extract facts from all .txt files in a folder (case_id = filename)"),
     "run-case":      (cmd_run_case,      "Run full pipeline for one case_id and save results"),
+    "run-all":       (cmd_run_all,       "Run pipeline for all cases (one-line summary per case)"),
     "learn-rules":   (cmd_learn_rules,   "Train NN proposer and persist extracted learned rules"),
     "eval":          (cmd_eval,          "Run evaluation metrics and save JSON/CSV report"),
     "llm-prompt":    (cmd_llm_prompt,    "Preview LLM system prompt and JSON schema (no API call)"),
@@ -3275,6 +3407,13 @@ def main() -> None:
             )
         elif name == "run-case":
             cmd_parser.add_argument("case_id", help="Case ID, e.g. TC-001")
+        elif name == "run-all":
+            cmd_parser.add_argument(
+                "--case",
+                metavar="CASE_ID",
+                nargs="*",
+                help="Ogranicz do podanych case_id (domyślnie: wszystkie)",
+            )
         elif name == "proof":
             cmd_parser.add_argument("proof_id", help="Proof run ID (facts.proof_id / proof_runs.proof_id)")
             cmd_parser.add_argument(

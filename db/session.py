@@ -78,8 +78,17 @@ class DBSession:
     # Case
     # ------------------------------------------------------------------
 
-    def load_case(self, case_id: str) -> tuple[list["Entity"], list["Fact"], list["Rule"], list[ClusterStateRow]]:
-        entities, facts, rules, states = load_case_data(self.conn, case_id)
+    def load_case(
+        self,
+        case_id: str,
+        *,
+        include_non_observed: bool = False,
+    ) -> tuple[list["Entity"], list["Fact"], list["Rule"], list[ClusterStateRow]]:
+        entities, facts, rules, states = load_case_data(
+            self.conn,
+            case_id,
+            include_non_observed=include_non_observed,
+        )
         self._entities_by_case[case_id] = entities
         return entities, facts, rules, states
 
@@ -101,13 +110,23 @@ class DBSession:
 
             upsert_cluster_states(self.conn, result.cluster_states, case_id_int)
 
-            if result.proof_nodes or result.candidate_feedback:
-                proof_result = "proved" if result.proved else "unknown"
-                if not result.proved and any(
+            has_derived = any(
+                node.rule_id is not None
+                for node in result.proof_nodes.values()
+            )
+            # Zapisuj proof_run tylko gdy są nowe derywacje LUB feedback kandydatów.
+            # Gdy has_derived=False (fakty już proved z poprzedniego run) pomijamy
+            # zapis proof_run — stary dobry run (z derived=True) zostaje w DB.
+            if has_derived or result.candidate_feedback:
+                if result.proved and has_derived:
+                    proof_result = "proved"
+                elif any(
                     item.outcome in {"blocked", "not_proved"}
                     for item in result.candidate_feedback
                 ):
                     proof_result = "not_proved"
+                else:
+                    proof_result = "unknown"
                 proof_run_id = save_proof_run(
                     self.conn,
                     proof_nodes=result.proof_nodes,

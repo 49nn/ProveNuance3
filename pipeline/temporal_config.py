@@ -44,10 +44,28 @@ def get_temporal_constraints(
                 n_days=14,
             ))
     """
+    from sv.temporal import TemporalWindowConstraint
+
     constraints: list[AnyTemporalConstraint] = []
 
     # ----------------------------------------------------------------
     # Zdefiniuj swoje constrainty tutaj.
     # ----------------------------------------------------------------
+
+    # Prawo do odstąpienia: oświadczenie musi wpłynąć w ciągu 14 dni od dostawy.
+    if (
+        "item_delivered_to" in predicate_positions
+        and "withdrawal_statement_received_on" in predicate_positions
+    ):
+        constraints.append(TemporalWindowConstraint(
+            name="withdrawal_within_14_days",
+            earlier_pred="item_delivered_to",
+            earlier_key_role="CUSTOMER",
+            earlier_date_role="DATE",
+            later_pred="withdrawal_statement_received_on",
+            later_key_role="CUSTOMER",
+            later_date_role="DATE",
+            n_days=14,
+        ))
 
     return constraints

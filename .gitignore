@@ -44,3 +44,6 @@ docs/backlog.md
 pipeline-learn-rules.md
 pipeline-run-case.md
 flow-learn.md
+pseudo_R1.jsonl
+pseudo_R2.jsonl
+split-training-data.ps1

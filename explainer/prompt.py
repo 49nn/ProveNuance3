@@ -285,7 +285,11 @@ def _render_fact(fact: Fact, entity_map: dict[str, str]) -> str:
             date_parts.append(arg.entity_id[2:])  # "D_2026-03-01" → "2026-03-01"
         elif arg.entity_id:
             name = entity_map.get(arg.entity_id, arg.entity_id)
-            readable_args.append(name)
+            # Pokaż "Nazwa (ID)" gdy nazwa jest inna niż ID — zachowuje konkretny identyfikator
+            if name != arg.entity_id:
+                readable_args.append(f"{name} ({arg.entity_id})")
+            else:
+                readable_args.append(name)
         elif arg.literal_value:
             readable_args.append(arg.literal_value)
 
@@ -410,14 +414,16 @@ def _render_neural_trace(
     entity_map: dict[str, str],
 ) -> str:
     """
-    Renderuje ślad neuronalny — top-k wpływów message-passing per fakt docelowy.
+    Renderuje ślad neuronalny — top-k unikalnych źródeł wpływu per fakt docelowy.
+
+    Kroki message-passing dla tego samego źródła są deduplicowane — zachowywany
+    jest wpis z największą bezwzględną deltą logitu T. Nazwy krawędzi (techniczne)
+    są pomijane.
 
     Format per fakt:
       [Nazwa faktu]
-        + typ_krawędzi: klaster (encja), krok N  <- wpływ zwiększający P(T)
-        - typ_krawędzi: klaster (encja), krok N  <- wpływ zmniejszający P(T)
-
-    neural_trace: dict[target_fact_id, list[NeuralTraceItem]] (posortowane wg magnitude)
+        + klaster (encja)   <- wzmocnienie P(T)
+        - klaster (encja)   <- osłabienie P(T)
     """
     fact_index: dict[str, Fact] = {f.fact_id: f for f in facts}
     lines: list[str] = []
@@ -428,28 +434,37 @@ def _render_neural_trace(
         fact = fact_index.get(fact_id)
         fact_label = _PREDICATE_PL.get(fact.predicate, fact.predicate) if fact else fact_id
 
+        # Deduplicate by source: keep entry with max abs(delta_T) per source key
+        best: dict[str, NeuralTraceItem] = {}
+        for item in trace_items:
+            source_key = item.from_cluster_id or item.from_fact_id or ""
+            if not source_key:
+                continue
+            delta_T = item.delta_logits.get("T", 0.0)
+            existing = best.get(source_key)
+            if existing is None or abs(delta_T) > abs(existing.delta_logits.get("T", 0.0)):
+                best[source_key] = item
+
+        # Sort by abs(delta_T) descending, take top 3 unique sources
+        top = sorted(best.values(), key=lambda i: abs(i.delta_logits.get("T", 0.0)), reverse=True)[:3]
+
         item_lines: list[str] = []
-        for item in trace_items[:3]:  # top-3 na fakt (zeby nie zasmiecac promptu)
+        for item in top:
             delta_T = item.delta_logits.get("T", 0.0)
             direction = "+" if delta_T >= 0 else "-"
 
             if item.from_cluster_id:
-                # format: "{cluster_name}:{entity_id}"
                 cluster_name, _, entity_id = item.from_cluster_id.partition(":")
                 cluster_label = _CLUSTER_PL.get(cluster_name, cluster_name)
                 entity_name = entity_map.get(entity_id, entity_id)
-                item_lines.append(
-                    f"    {direction} {item.edge_type}: {cluster_label} ({entity_name}), krok {item.step}"
-                )
+                item_lines.append(f"    {direction} {cluster_label} ({entity_name})")
             elif item.from_fact_id:
                 src_fact = fact_index.get(item.from_fact_id)
                 src_label = (
                     _PREDICATE_PL.get(src_fact.predicate, src_fact.predicate)
                     if src_fact else item.from_fact_id
                 )
-                item_lines.append(
-                    f"    {direction} {item.edge_type}: <- {src_label}, krok {item.step}"
-                )
+                item_lines.append(f"    {direction} {src_label}")
 
         if item_lines:
             lines.append(f"  [{fact_label}]")

@@ -359,6 +359,9 @@ class ProposeVerifyRunner:
         final_states = current_states
         final_result = None
         feedback_by_fact_id = {}
+        # Accumulated proof_nodes: DERIVED nodes (rule_id != None) from any round
+        # take priority over BASE nodes from later rounds where the atom is already proved.
+        accumulated_proof_nodes: dict = {}
         rounds_run = 0
 
         for round_idx in range(self.max_refinement_rounds):
@@ -387,6 +390,14 @@ class ProposeVerifyRunner:
 
             for item in sv_result.candidate_feedback:
                 feedback_by_fact_id[item.fact_id] = item
+
+            # Merge proof_nodes: keep DERIVED (rule_id != None) nodes from any round.
+            # A node derived in round N should not be overwritten by a BASE entry in round N+1
+            # (when the atom was promoted to proved and became a base atom).
+            for atom, node in sv_result.proof_nodes.items():
+                existing = accumulated_proof_nodes.get(atom)
+                if existing is None or (node.rule_id is not None and existing.rule_id is None):
+                    accumulated_proof_nodes[atom] = node
 
             final_result = sv_result
             final_states = nn_states
@@ -418,7 +429,7 @@ class ProposeVerifyRunner:
             facts=all_facts,
             cluster_states=final_states,
             new_facts=final_result.new_facts,
-            proof_nodes=dict(final_result.proof_nodes),
+            proof_nodes=accumulated_proof_nodes,
             derived_atoms=final_result.derived_atoms,
             candidate_feedback=list(feedback_by_fact_id.values()),
             rounds=rounds_run,

@@ -137,11 +137,18 @@ class SymbolicVerifier:
         }
 
         # Połączone mapowanie ról: bazowe + derywowane z głów reguł + pomocnicze temporalne.
+        # Klastry też dodajemy (entity_role, value_role) — potrzebne do grounding
+        # proweniencji: _resolve_role_name("ARG0", "customer_type") → entity_role.
+        cluster_positions = {
+            name: [er, vr]
+            for name, (er, vr) in self.cluster_roles.items()
+        }
         all_positions = {
             **self.predicate_positions,
             **self._derived_positions(all_rules),
             **TEMPORAL_HELPER_POSITIONS,   # before, same_day/week/month/year
             **window_positions,            # within_{N}_days_after
+            **cluster_positions,           # customer_type → [CUSTOMER, VALUE], etc.
         }
 
         # 0. Fail-fast: negacja musi być stratyfikowana.

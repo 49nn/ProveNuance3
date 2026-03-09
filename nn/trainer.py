@@ -3,7 +3,7 @@ ProposerTrainer — pętla treningu z BPTT przez T kroków.
 
 Strategia maskowania (self-supervised):
   1. Wybierz losowy podzbiór clamped węzłów (frakcja = config.mask_fraction).
-  2. Tymczasowo odklampuj je (usuń z frozen, nie modyfikuj logitów).
+  2. Tymczasowo odklampuj je i usuń bezpośredni sygnał clamp z logitów wejściowych.
   3. Uruchom forward pass bez tracer.
   4. Oblicz L na zamaskowanych węzłach (znamy prawdziwą wartość = argmax przed maskowaniem).
   5. Backward + optimizer step.
@@ -239,16 +239,16 @@ class ProposerTrainer:
     def _sample_and_mask(
         self,
         data: HeteroData,
-    ) -> tuple[list[tuple[str, int, int, float]], dict[str, tuple[torch.Tensor, torch.Tensor]]]:
+    ) -> tuple[list[tuple[str, int, int, float]], dict[str, tuple[torch.Tensor, torch.Tensor, torch.Tensor]]]:
         """
         Wybiera losowo frakcję clamped węzłów klastrów do maskowania.
 
         Zwraca:
             masked_items: [(cluster_name, node_idx, true_domain_idx), ...]
-            saved_clamp_state: cluster_type -> (is_clamped_copy, clamp_hard_copy)
+            saved_clamp_state: cluster_type -> (is_clamped_copy, clamp_hard_copy, x_copy)
         """
         masked_items: list[tuple[str, int, int, float]] = []
-        saved: dict[str, tuple[torch.Tensor, torch.Tensor]] = {}
+        saved: dict[str, tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = {}
 
         for node_type in data.node_types:
             if node_type == "fact":
@@ -264,7 +264,11 @@ class ProposerTrainer:
             )
 
             # Zapisz oryginał
-            saved[node_type] = (is_clamped.clone(), clamp_hard.clone())
+            saved[node_type] = (
+                is_clamped.clone(),
+                clamp_hard.clone(),
+                data[node_type].x.clone(),
+            )
 
             clamped_indices = is_clamped.nonzero(as_tuple=False).squeeze(1).tolist()
             if not clamped_indices:
@@ -282,21 +286,23 @@ class ProposerTrainer:
                 weight = float(mask_weight[idx].item()) if mask_weight.numel() > idx else 1.0
                 masked_items.append((cname, idx, k_true, weight))
 
-                # Odklampuj: wyzeruj flagi
+                # Odklampuj i usuń wejściowy leak targetu z wcześniej zastosowanego clampu.
                 data[node_type].is_clamped[idx] = False
                 data[node_type].clamp_hard[idx] = False
+                data[node_type].x[idx].zero_()
 
         return masked_items, saved
 
     def _restore_clamp(
         self,
         data: HeteroData,
-        saved: dict[str, tuple[torch.Tensor, torch.Tensor]],
+        saved: dict[str, tuple[torch.Tensor, torch.Tensor, torch.Tensor]],
     ) -> None:
         """Przywraca oryginalne flagi clamp po backward."""
-        for node_type, (orig_is_clamped, orig_clamp_hard) in saved.items():
+        for node_type, (orig_is_clamped, orig_clamp_hard, orig_x) in saved.items():
             data[node_type].is_clamped = orig_is_clamped
             data[node_type].clamp_hard = orig_clamp_hard
+            data[node_type].x = orig_x
 
     # ------------------------------------------------------------------
     # Pętla epok

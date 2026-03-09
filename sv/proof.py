@@ -62,16 +62,30 @@ def _match_literal(
     - VarTerm("_") → wildcard, zawsze pasuje, nic nie binduje
     - VarTerm(x)   → binduje lub sprawdza spójność
     - ConstTerm(c) → porównanie z wartością w atomie
+
+    Positional fallback: gdy role-based lookup zawiedzie (rola w regule ≠ rola
+    w GroundAtom), próbuje dopasowania pozycyjnego wg kolejności ról z
+    predicate_positions. Potrzebne dla klastrów gdzie regułę zapisano z inną
+    nazwą roli niż resolved_value_role schematu (np. "TYPE" vs "VALUE").
     """
     if lit.predicate != atom.predicate:
         return None
 
     atom_lookup = dict(atom.bindings)
+    # Pozycyjna kolejność wartości wg predicate_positions (dla fallbacku)
+    positions = (predicate_positions or {}).get(lit.predicate)
+    positional_vals: list[str | None] | None = None
+    if positions:
+        positional_vals = [atom_lookup.get(r) for r in positions]
+
     new_subst = dict(subst)
 
-    for arg in lit.args:
+    for i, arg in enumerate(lit.args):
         role = _resolve_role_name(arg.role, lit.predicate, predicate_positions)
         atom_val = atom_lookup.get(role)
+        # Positional fallback: użyj i-tej wartości z predicate_positions gdy rola nie pasuje
+        if atom_val is None and positional_vals is not None and i < len(positional_vals):
+            atom_val = positional_vals[i]
         if atom_val is None:
             return None
 
