@@ -19,6 +19,8 @@ from rich.table import Table
 from rich.text import Text
 from runtime_env import load_project_env
 
+from nlp.genai_json import parse_json_response
+
 # Force UTF-8 output so Rich unicode symbols work on Windows legacy consoles.
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -1121,8 +1123,16 @@ def _collect_ontology_counts(conn) -> dict[str, int]:
         entities = int(cur.fetchone()[0])
         cur.execute("SELECT COUNT(*) FROM facts")
         facts = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM self_training_rounds")
+        self_training_rounds = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM pseudo_fact_labels")
+        pseudo_fact_labels = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM pseudo_cluster_labels")
+        pseudo_cluster_labels = int(cur.fetchone()[0])
         cur.execute("SELECT COUNT(*) FROM cases")
         cases = int(cur.fetchone()[0])
+        cur.execute("SELECT COUNT(*) FROM case_queries")
+        case_queries = int(cur.fetchone()[0])
         cur.execute("SELECT COUNT(*) FROM sources")
         sources = int(cur.fetchone()[0])
     return {
@@ -1133,7 +1143,11 @@ def _collect_ontology_counts(conn) -> dict[str, int]:
         "rule_modules": modules,
         "entities": entities,
         "facts": facts,
+        "self_training_rounds": self_training_rounds,
+        "pseudo_fact_labels": pseudo_fact_labels,
+        "pseudo_cluster_labels": pseudo_cluster_labels,
         "cases": cases,
+        "case_queries": case_queries,
         "sources": sources,
     }
 
@@ -1153,8 +1167,16 @@ def _apply_ontology_reset(conn) -> dict[str, int]:
         result["cluster_states"] = cur.rowcount
         cur.execute("DELETE FROM entities")
         result["entities"] = cur.rowcount
+        cur.execute("DELETE FROM pseudo_fact_labels")
+        result["pseudo_fact_labels"] = cur.rowcount
+        cur.execute("DELETE FROM pseudo_cluster_labels")
+        result["pseudo_cluster_labels"] = cur.rowcount
+        cur.execute("DELETE FROM self_training_rounds")
+        result["self_training_rounds"] = cur.rowcount
         cur.execute("DELETE FROM proof_runs")        # cascades proof_steps
         result["proof_runs"] = cur.rowcount
+        cur.execute("DELETE FROM case_queries")
+        result["case_queries"] = cur.rowcount
         cur.execute("DELETE FROM cases")             # cascades case_queries
         result["cases"] = cur.rowcount
         cur.execute("DELETE FROM sources")
@@ -1458,7 +1480,11 @@ def cmd_reset_state(args: argparse.Namespace) -> None:
             console.print(f"rule_modules: {onto_counts['rule_modules']}")
             console.print(f"entities:     {onto_counts['entities']}")
             console.print(f"facts:        {onto_counts['facts']}")
+            console.print(f"self_training_rounds: {onto_counts['self_training_rounds']}")
+            console.print(f"pseudo_fact_labels:   {onto_counts['pseudo_fact_labels']}")
+            console.print(f"pseudo_cluster_labels:{onto_counts['pseudo_cluster_labels']}")
             console.print(f"cases:        {onto_counts['cases']}")
+            console.print(f"case_queries: {onto_counts['case_queries']}")
             console.print(f"sources:      {onto_counts['sources']}")
         else:
             counts = _collect_reset_counts(
@@ -1508,7 +1534,11 @@ def cmd_reset_state(args: argparse.Namespace) -> None:
         console.print(f"deleted rule_modules: {applied_onto['rule_modules']}")
         console.print(f"deleted entities:     {applied_onto['entities']}")
         console.print(f"deleted facts:        {applied_onto['facts']}")
+        console.print(f"deleted self_training_rounds: {applied_onto['self_training_rounds']}")
+        console.print(f"deleted pseudo_fact_labels:   {applied_onto['pseudo_fact_labels']}")
+        console.print(f"deleted pseudo_cluster_labels:{applied_onto['pseudo_cluster_labels']}")
         console.print(f"deleted cases:        {applied_onto['cases']}")
+        console.print(f"deleted case_queries: {applied_onto['case_queries']}")
         console.print(f"deleted sources:      {applied_onto['sources']}")
     else:
         console.print("[bold green]Reset Applied[/bold green]")
@@ -3185,6 +3215,7 @@ def cmd_gen_ontology(args: argparse.Namespace) -> None:
         "temperature": 0.0,
         "response_mime_type": "application/json",
         "response_schema": schema,
+        "max_output_tokens": cfg.extractor.max_output_tokens,
     }
 
     _max_retries: int = getattr(cfg.extractor, "max_retries", 2)
@@ -3205,7 +3236,21 @@ def cmd_gen_ontology(args: argparse.Namespace) -> None:
             contents=current_prompt,
             config=_gen_cfg,
         )
-        raw: dict = _json.loads(response.text)
+        try:
+            raw = parse_json_response(response)
+        except ValueError as exc:
+            if attempt < _max_retries:
+                console.print(
+                    f"  [yellow]Niepoprawny JSON z Gemini[/yellow] — ponawiam ({attempt + 1}/{_max_retries}): {exc}"
+                )
+                current_prompt = (
+                    build_ontology_prompt(text)
+                    + "\n\nWAŻNE TECHNICZNIE: zwróć wyłącznie jeden kompletny obiekt JSON zgodny ze schema. "
+                      "Nie dodawaj markdown, komentarzy ani urwanego końca odpowiedzi."
+                )
+                continue
+            console.print(f"  [bold red]Gemini zwrócił niepoprawny JSON.[/bold red] {exc}")
+            raise SystemExit(1) from exc
         result = parse_ontology_response(raw, source_id)
 
         n_err = len(result.validation_errors)
@@ -3256,6 +3301,64 @@ def cmd_gen_ontology(args: argparse.Namespace) -> None:
     console.print(
         f"[bold green]gen-ontology completed[/bold green]: {result.summary()} "
         f"(active ontology replaced)"
+    )
+    _print_ontology_tables(result)
+
+
+def cmd_load_ontology_json(args: argparse.Namespace) -> None:
+    """
+    Ładuje ontologię z lokalnego pliku JSON i zapisuje ją do DB po walidacji.
+
+    Tryby:
+      pn3 load-ontology-json --file docs/regulamin1_ontology.json
+      pn3 load-ontology-json --file docs/regulamin1_ontology.json --dry-run
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    from nlp.ontology_builder import parse_ontology_response
+
+    input_path = _Path(args.file)
+    if not input_path.is_file():
+        console.print(f"[bold red]Plik nie istnieje:[/bold red] {input_path}")
+        raise SystemExit(1)
+
+    try:
+        raw = _json.loads(input_path.read_text(encoding="utf-8"))
+    except _json.JSONDecodeError as exc:
+        console.print(
+            f"[bold red]Niepoprawny JSON:[/bold red] {input_path} "
+            f"(line={exc.lineno}, col={exc.colno}): {exc.msg}"
+        )
+        raise SystemExit(1) from exc
+
+    source_id = args.source_id or input_path.stem
+    result = parse_ontology_response(raw, source_id)
+
+    if result.validation_errors:
+        console.print(
+            f"[bold red]load-ontology-json aborted[/bold red]: "
+            f"{len(result.validation_errors)} bledow walidacji."
+        )
+        for err in result.validation_errors:
+            console.print(f"  [dim]• {err}[/dim]")
+        raise SystemExit(1)
+
+    if args.dry_run:
+        console.print(
+            f"[bold yellow]dry-run[/bold yellow] — {result.summary()}"
+        )
+        _print_ontology_tables(result)
+        return
+
+    from db import DBSession
+
+    with DBSession.connect() as session:
+        session.save_ontology(result)
+
+    console.print(
+        f"[bold green]load-ontology-json completed[/bold green]: "
+        f"{result.summary()} (active ontology replaced)"
     )
     _print_ontology_tables(result)
 
@@ -3365,6 +3468,7 @@ _COMMANDS = {
     "network-graph": (cmd_network_graph, "Export full case network graph (entities/facts/clusters/edges)"),
     "reset-state":   (cmd_reset_state,   "Reset runtime artifacts (learned rules, inferred facts, proofs, traces)"),
     "gen-ontology":  (cmd_gen_ontology,  "Generate ontology from regulatory text using LLM and save to DB"),
+    "load-ontology-json": (cmd_load_ontology_json, "Load ontology from a local JSON file and save to DB"),
     "ingest-text":   (cmd_ingest_text,   "Extract facts from text and save to DB for a given case_id"),
     "ingest-folder": (cmd_ingest_folder, "Extract facts from all .txt files in a folder (case_id = filename)"),
     "run-case":      (cmd_run_case,      "Run full pipeline for one case_id and save results"),
@@ -3588,6 +3692,24 @@ def main() -> None:
                 "--raw",
                 action="store_true",
                 help="Wydrukuj surowy JSON z Gemini.",
+            )
+        elif name == "load-ontology-json":
+            cmd_parser.add_argument(
+                "--file",
+                required=True,
+                metavar="PATH",
+                help="Ścieżka do pliku JSON z ontologią.",
+            )
+            cmd_parser.add_argument(
+                "--source-id",
+                metavar="ID",
+                default=None,
+                help="Opcjonalny source_id zapisywany przy ontologii (domyślnie: nazwa pliku bez rozszerzenia).",
+            )
+            cmd_parser.add_argument(
+                "--dry-run",
+                action="store_true",
+                help="Waliduj i pokaż ontologię bez zapisu do DB.",
             )
         elif name == "ingest-text":
             cmd_parser.add_argument("case_id", help="Case ID, np. TC-002")

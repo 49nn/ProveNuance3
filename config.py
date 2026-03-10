@@ -21,6 +21,7 @@ class ExtractorConfig:
     gemini_model: str = "gemini-2.5-flash"
     temperature: float = 0.0
     max_retries: int = 2
+    max_output_tokens: int | None = 65536
     sv_verification: bool = True
     api_key_env: str = "GEMINI_API_KEY"
     preflight_timeout_s: int = 120
@@ -28,6 +29,8 @@ class ExtractorConfig:
     def __post_init__(self) -> None:
         if self.backend != "llm":
             raise ValueError("Only backend='llm' is supported.")
+        if self.max_output_tokens is not None and self.max_output_tokens <= 0:
+            raise ValueError("max_output_tokens must be > 0.")
         if self.preflight_timeout_s <= 0:
             raise ValueError("preflight_timeout_s must be > 0.")
 

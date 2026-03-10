@@ -3,13 +3,13 @@ LLM-assisted drafting of evaluation case queries.
 """
 from __future__ import annotations
 
-import json
 import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from runtime_env import get_required_env
+from .genai_json import parse_json_response
 
 _PROMPT_TEMPLATE_PATH = Path(__file__).with_name("draft_case_queries_prompt_template.txt")
 _QUERY_RE = re.compile(r"^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:\((.*)\))?\s*$")
@@ -187,17 +187,15 @@ class CaseQueryDrafter:
             temperature=0.0,
             responseMimeType="application/json",
             responseSchema=self._response_schema,
+            maxOutputTokens=self._config.max_output_tokens,
         )
         response = self._client.models.generate_content(
             model=self._config.gemini_model,
             contents=prompt,
             config=request_config,
         )
-        response_text = response.text
-        if response_text is None:
-            raise ValueError("Gemini returned an empty response body")
         return parse_case_query_draft_response(
-            json.loads(response_text),
+            parse_json_response(response),
             predicate_positions=self._predicate_positions,
             max_queries=max_queries,
         )

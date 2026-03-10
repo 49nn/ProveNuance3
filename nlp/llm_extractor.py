@@ -11,7 +11,6 @@ Przepływ:
 """
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 from typing import Any
 
@@ -24,6 +23,7 @@ from .llm_prompt import (
     build_system_prompt,
     parse_llm_response,
 )
+from .genai_json import parse_json_response
 from .ontology_alignment import align_extraction_to_ontology
 from .result import ExtractionResult
 
@@ -196,16 +196,14 @@ class LLMExtractor:
             temperature=self._config.temperature,
             responseMimeType="application/json",
             responseSchema=self._response_schema,
+            maxOutputTokens=self._config.max_output_tokens,
         )
         response = self._client.models.generate_content(
             model=self._config.gemini_model,
             contents=prompt,
             config=request_config,
         )
-        response_text = response.text
-        if response_text is None:
-            raise ValueError("Gemini returned an empty response body")
-        return json.loads(response_text)
+        return parse_json_response(response)
 
     # ------------------------------------------------------------------
     # Wykrywanie konfliktów w surowej odpowiedzi LLM
